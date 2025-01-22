@@ -1,0 +1,44 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "default",
+            "hidden": true,
+            "generator": "Unix Makefiles",
+            "environment": {
+                "CC":"/usr/bin/clang",
+                "CXX": "/usr/bin/clang++"
+            }
+        },
+        {
+            "name": "linux-clang-debug",
+            "inherits":["default"],
+            "displayName": "linux clang debug",
+            "description": "linux clang debug build",
+            "binaryDir": "build/linux/clang/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "linux-clang-release",
+            "inherits":["default"],
+            "displayName": "linux clang release",
+            "description": "linux clang release build",
+            "binaryDir": "build/linux/clang/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "linux-clang-dist",
+            "inherits":["default"],
+            "displayName": "linux clang dist",
+            "description": "linux clang dist build",
+            "binaryDir": "build/linux/clang/dist",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel"
+            }
+        }
+    ]
+}

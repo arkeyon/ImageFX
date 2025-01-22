@@ -1,0 +1,29 @@
+{
+    "unnamed": [
+        {
+            "name" : "launchcommand"
+        },
+        {
+            "name" : "src"
+        },
+        {
+            "name" : "dst"
+        }
+    ],
+    "named": [
+        {
+            "name": "help",
+            "description": "",
+            "arguments": [],
+            "requiredfriends": [],
+            "subcommands": []
+        },
+        {
+            "name": "pixelate",
+            "description": "Usage ImageFX [src] [dst] -pixelate <reduction>",
+            "arguments": ["int"],
+            "requiredfriends": ["src", "dst"],
+            "subcommands": []
+        }
+    ]
+}
