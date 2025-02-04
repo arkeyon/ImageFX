@@ -14,18 +14,19 @@ namespace saf {
     {
     public:
         Application(const nlohmann::json& args);
-        void Init();
-        virtual void Run();
-        virtual void Update() =0;
-
         Application(const Application&) = delete;
         Application(Application&&) = delete;
         Application& operator=(const Application&) = delete;
         Application& operator=(Application&&) = delete;
         virtual ~Application() = default;
+
+        bool Init();
+        virtual void Run();
+        virtual void Update() =0;
     private:
         nlohmann::json m_RunArgs;
         std::unique_ptr<Window> m_Window;
+
     };
 
 }

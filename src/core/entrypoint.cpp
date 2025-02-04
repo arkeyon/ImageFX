@@ -13,8 +13,7 @@ int main(int argc, char** argsv)
         app = CreateApplication(std::move(argsman.m_RunArguments));
     }
     
-    app->Init();
-    app->Run();
+    if (app->Init()) app->Run();
 
     IFX_INFO("Application exiting...");
 

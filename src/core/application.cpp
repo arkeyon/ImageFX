@@ -7,12 +7,16 @@ namespace saf {
     Application::Application(const nlohmann::json& args)
         : m_RunArgs(args), m_Window(std::make_unique<Window>(1024, 768, "Example"))
     {
-        IFX_TRACE("Application created");
+
     }
 
-    void Application::Init()
+    bool Application::Init()
     {
         IFX_INFO("Application Init");
+
+        m_Window->Init();
+
+        return true;
     }
 
     void Application::Run()

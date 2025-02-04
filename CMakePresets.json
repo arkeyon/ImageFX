@@ -39,6 +39,17 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel"
             }
+        },
+        {
+            "name": "windows-msvc-debug",
+            "inherits":["default"],
+            "displayName": "windows msvc debug",
+            "description": "windows msvc debug build",
+            "binaryDir": "build/windows/msvc/debug",
+            "generator": "Visual Studio 17 2022",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         }
     ]
 }
