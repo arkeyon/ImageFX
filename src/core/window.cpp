@@ -21,9 +21,10 @@ namespace saf {
     }
 
     Window::Window(uint32_t width, uint32_t height, const char* title)
-    : m_Width(width), m_Height(height), m_Title(title)
+        : m_Width(width), m_Height(height), m_Title(title)
     {
-
+        m_vkLayers = { "VK_LAYER_KHRONOS_validation" };
+        m_vkExtensions = { "VK_KHR_portability_enumeration", "VK_EXT_debug_utils" };
     }
 
     void Window::Init()
@@ -37,7 +38,7 @@ namespace saf {
         {
             IFX_ERROR("Window failed FindQueueFamily graphics");
         }
-        else IFX_TRACE("Window FindQueFamily graphics found at {0}", m_vkGraphicsQueueIndex);
+        else IFX_TRACE("Window FindQueueFamily graphics found at index: {0}", m_vkGraphicsQueueIndex);
 
         CreateDevice();
         CreateSurface();
@@ -46,7 +47,7 @@ namespace saf {
         {
             IFX_ERROR("Window failed FindQueueFamily present");
         }
-        else IFX_TRACE("Window FindQueFamily present found at {0}", m_vkPresentQueueIndex);
+        else IFX_TRACE("Window FindQueueFamily present found at index: {0}", m_vkPresentQueueIndex);
     }
 
     void Window::InitGLFW()
@@ -63,7 +64,7 @@ namespace saf {
             throw std::exception("GLFW failed to initialize");
         }
 
-        if (!glfwVulkanSupported())
+        if (glfwVulkanSupported())
         {
             throw std::exception("Vulkan not support");
         }
@@ -95,12 +96,7 @@ namespace saf {
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
-        m_vkLayers = { "VK_LAYER_KHRONOS_validation" };
-
-        m_vkExtensions.reserve(glfw_extension_count + 2);
         for (int n = 0; n < glfw_extension_count; ++n) m_vkExtensions.emplace_back(glfw_extensions[n]);
-        m_vkExtensions.emplace_back("VK_KHR_portability_enumeration");
-        m_vkExtensions.emplace_back("VK_EXT_debug_utils");
 
         auto supported_extentions = vk::enumerateInstanceExtensionProperties();
 
@@ -215,6 +211,11 @@ namespace saf {
 
     int32_t Window::FindQueueFamily(vk::QueueFlags flags, vk::SurfaceKHR surface)
     {
+        if (!m_vkPhysicalDevice)
+        {
+            throw std::exception("Vulkan no physical device set");
+            return -1;
+        }
 
         std::vector<vk::QueueFamilyProperties> queue_family_properties = m_vkPhysicalDevice.getQueueFamilyProperties();
         
@@ -275,6 +276,11 @@ namespace saf {
 
     void Window::CreateDevice()
     {
+        if (!m_vkPhysicalDevice)
+        {
+            throw std::exception("Vulkan no queue families found on current physical device");
+        }
+
         std::array<const char*, 1> extensions = { "VK_KHR_swapchain" };
 
         float queue_priority = 1.f;

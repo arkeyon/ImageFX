@@ -20,7 +20,7 @@ namespace saf {
         Application& operator=(Application&&) = delete;
         virtual ~Application() = default;
 
-        bool Init();
+        void Init();
         virtual void Run();
         virtual void Update() =0;
     private:

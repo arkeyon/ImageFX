@@ -65,17 +65,17 @@ namespace saf {
         uint32_t m_Width, m_Height;
         const char* m_Title;
 
-        GLFWwindow* m_glfwWindow;
+        GLFWwindow* m_glfwWindow = nullptr;
         std::vector<const char*> m_vkLayers;
         std::vector<const char*> m_vkExtensions;
-        vk::Instance m_vkInstance;
-        vk::DebugUtilsMessengerEXT m_vkMessenger;
-        vk::PhysicalDevice m_vkPhysicalDevice;
-        uint32_t m_vkGraphicsQueueIndex;
-        uint32_t m_vkPresentQueueIndex;
-        vk::Device m_vkDevice;
-        vk::SurfaceKHR m_vkSurface;
-        SwapChainSupportDetails m_vkSwapChainDetails;
+        vk::Instance m_vkInstance = nullptr;
+        vk::DebugUtilsMessengerEXT m_vkMessenger = nullptr;
+        vk::PhysicalDevice m_vkPhysicalDevice = nullptr;
+        uint32_t m_vkGraphicsQueueIndex = -1;
+        uint32_t m_vkPresentQueueIndex = -1;
+        vk::Device m_vkDevice = nullptr;
+        vk::SurfaceKHR m_vkSurface = nullptr;
+        SwapChainSupportDetails m_vkSwapChainDetails {};
     };
 
 }

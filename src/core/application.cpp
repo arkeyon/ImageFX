@@ -10,13 +10,11 @@ namespace saf {
 
     }
 
-    bool Application::Init()
+    void Application::Init()
     {
         IFX_INFO("Application Init");
 
         m_Window->Init();
-
-        return true;
     }
 
     void Application::Run()
