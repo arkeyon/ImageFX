@@ -57,7 +57,7 @@ namespace saf {
             IFX_ERROR("GLFW failed to initialize");
         }
 
-        if (glfwVulkanSupported())
+        if (!glfwVulkanSupported())
         {
             IFX_ERROR("Vulkan not support");
         }
