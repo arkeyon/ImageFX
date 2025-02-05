@@ -7,7 +7,6 @@ namespace saf {
     Application::Application(const nlohmann::json& args)
         : m_RunArgs(args), m_Window(std::make_unique<Window>(1024, 768, "Example"))
     {
-
     }
 
     void Application::Init()

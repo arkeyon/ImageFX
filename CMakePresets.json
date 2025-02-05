@@ -39,6 +39,7 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel"
             }
+<<<<<<< HEAD
         },
         {
             "name": "windows-msvc-debug",
@@ -50,6 +51,8 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
+=======
+>>>>>>> 443ac08 (vscode support)
         }
     ]
 }
