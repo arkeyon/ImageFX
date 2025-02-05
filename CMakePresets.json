@@ -6,8 +6,8 @@
             "hidden": true,
             "generator": "Unix Makefiles",
             "environment": {
-                "CC":"/usr/bin/clang",
-                "CXX": "/usr/bin/clang++"
+                "CC":"/usr/bin/clang-18",
+                "CXX": "/usr/bin/clang++-18"
             }
         },
         {
@@ -39,7 +39,6 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel"
             }
-<<<<<<< HEAD
         },
         {
             "name": "windows-msvc-debug",
@@ -51,8 +50,6 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
-=======
->>>>>>> 443ac08 (vscode support)
         }
     ]
 }

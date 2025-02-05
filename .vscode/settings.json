@@ -98,6 +98,6 @@
         "-I${workspaceFolder}/dependencies",
         "-I${workspaceFolder}/dependencies/stb",
         "-I${workspaceFolder}/dependencies/glfw/include",
-        "-I${workspaceFolder}/dependencies/Vulkan-Headers/include"
+        "-I${workspaceFolder}/dependencies/Vulkan-Headers/include",
     ]
 }

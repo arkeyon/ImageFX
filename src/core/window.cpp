@@ -3,13 +3,6 @@
 
 #include "utils/log.h"
 
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
-#include <vulkan/vulkan_hpp_macros.hpp>
-
-#include "GLFW/glfw3.h"
-
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 namespace saf {
@@ -61,21 +54,23 @@ namespace saf {
 
         if (glfwstatus == GLFW_FALSE)
         {
-            throw std::exception("GLFW failed to initialize");
+            IFX_ERROR("GLFW failed to initialize");
         }
 
         if (glfwVulkanSupported())
         {
-            throw std::exception("Vulkan not support");
+            IFX_ERROR("Vulkan not support");
         }
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         m_glfwWindow = glfwCreateWindow(m_Width, m_Height, m_Title, nullptr, nullptr);
 
+        std::logic_error("GLFW failed to create window");
+
         if (!m_glfwWindow)
         {
-            throw std::exception("GLFW failed to create window");
+            IFX_ERROR("GLFW failed to create window");
         }
 
         glfwSetKeyCallback(m_glfwWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -117,7 +112,7 @@ namespace saf {
             {
                 IFX_ERROR("\t{0}", *required_extention_not_found);
             }
-            throw std::exception("Vulkan missing required extention(s)");
+            IFX_ERROR("Vulkan missing required extention(s)");
         }
 
         auto supported_layers = vk::enumerateInstanceLayerProperties();
@@ -139,7 +134,7 @@ namespace saf {
             {
                 IFX_ERROR("\t{0}", *required_layer_not_found);
             }
-            throw std::exception("Vulkan missing required layer(s)");
+            IFX_ERROR("Vulkan missing required layer(s)");
         }
 
         const vk::ApplicationInfo applicationInfo(m_Title, VK_MAKE_API_VERSION(0, 1, 0, 0), m_Title, VK_MAKE_API_VERSION(0, 1, 0, 0), VK_API_VERSION_1_1);
@@ -166,7 +161,7 @@ namespace saf {
                 return VK_FALSE;
             });
         m_vkMessenger = m_vkInstance.createDebugUtilsMessengerEXT(messengercreateinfo);
-        if (!m_vkMessenger) throw std::exception("Vulkan failed to create debug messenger");
+        if (!m_vkMessenger) IFX_ERROR("Vulkan failed to create debug messenger");
     }
 
     bool IsDevicesSuitable(vk::PhysicalDevice device)
@@ -204,7 +199,7 @@ namespace saf {
     void Window::SetPhysicalDevice()
     {
         std::vector<vk::PhysicalDevice> devices = m_vkInstance.enumeratePhysicalDevices();
-        if (devices.empty()) throw std::exception("Vulkan didnt find any physical devices");
+        if (devices.empty()) IFX_ERROR("Vulkan didnt find any physical devices");
 
         m_vkPhysicalDevice = *std::find_if(devices.begin(), devices.end(), IsDevicesSuitable);
     }
@@ -213,7 +208,7 @@ namespace saf {
     {
         if (!m_vkPhysicalDevice)
         {
-            throw std::exception("Vulkan no physical device set");
+            IFX_ERROR("Vulkan no physical device set");
             return -1;
         }
 
@@ -258,8 +253,7 @@ namespace saf {
                 if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eSparseBinding) supports += supports.empty() ? "sparsebinding" : ", sparsebinding";
                 if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eTransfer) supports += supports.empty() ? "transfer" : ", transfer";
                 if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eVideoDecodeKHR) supports += supports.empty() ? "videodecode" : ", videodecode";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eVideoEncodeKHR) supports += supports.empty() ? "videoencode" : ", videoencode";
-
+                //if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eVideoEncodeKHR) supports += supports.empty() ? "videoencode" : ", videoencode";
                 IFX_TRACE("\tSupports: {0}", supports);
                 IFX_TRACE("\tFamily supports {0} queue{1}", qfp.queueCount, qfp.queueCount > 1 ? "s" : "");
             }
@@ -278,7 +272,7 @@ namespace saf {
     {
         if (!m_vkPhysicalDevice)
         {
-            throw std::exception("Vulkan no queue families found on current physical device");
+            IFX_ERROR("Vulkan no queue families found on current physical device");
         }
 
         std::array<const char*, 1> extensions = { "VK_KHR_swapchain" };
@@ -291,7 +285,7 @@ namespace saf {
 
         if (!m_vkDevice)
         {
-            throw std::exception("Vulkan failed to create logical device");
+            IFX_ERROR("Vulkan failed to create logical device");
         }
 
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_vkDevice);
@@ -302,7 +296,7 @@ namespace saf {
         VkResult result = glfwCreateWindowSurface(m_vkInstance, m_glfwWindow, nullptr, reinterpret_cast<VkSurfaceKHR*>(&m_vkSurface));
         if (result != VK_SUCCESS || !m_vkSurface)
         {
-            throw std::exception("Vulkan failed to create glfw surface");
+            IFX_ERROR("Vulkan failed to create glfw surface");
         }
     }
 
