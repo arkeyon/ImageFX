@@ -1,8 +1,8 @@
 
 cmake_minimum_required(VERSION 3.28)
 project(ImageFX VERSION 1.0
-		DESCRIPTION "Image Effects Project"
-		LANGUAGES CXX)
+DESCRIPTION "Image Effects Project"
+LANGUAGES CXX)
 
 
 set($ENV{VULKAN_SDK} "/home/arkeyon/Downloads/1.4.304.0/x86_64")
@@ -12,6 +12,7 @@ set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK}/include")
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(dependencies/spdlog)
 add_subdirectory(dependencies/glfw)
