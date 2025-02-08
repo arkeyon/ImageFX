@@ -61,7 +61,7 @@ message( STATUS "Vulkan_shaderc_combined_FOUND: ${Vulkan_shaderc_combined_FOUND}
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 # Require Vulkan version ≥ 1.3.256 (earliest version when the Vulkan module was available)
 if( ${Vulkan_VERSION} VERSION_LESS "1.3.256" OR NOT MSVC)
-	message( WARNING "VulkanHppModule unsupported directling linking to vulkan")
+	message( WARNING "VulkanHppModule unsupported directly linking to vulkan")
 	target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan)
 
 	target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
