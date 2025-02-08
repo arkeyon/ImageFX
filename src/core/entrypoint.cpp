@@ -12,17 +12,9 @@ int main(int argc, char** argsv)
         saf::ArgumentManager argsman(argc, argsv);
         app = CreateApplication(std::move(argsman.m_RunArguments));
     }
-    
-    try {
 
-        app->Init();
-        app->Run();
-
-    }
-    catch (const std::exception& e)
-    {
-        IFX_TRACE(e.what());
-    }
+    app->Init();
+    app->Run();
 
     IFX_INFO("Application exiting...");
 

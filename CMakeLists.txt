@@ -17,7 +17,7 @@ add_subdirectory(dependencies/spdlog)
 add_subdirectory(dependencies/glfw)
 
 add_executable(${PROJECT_NAME}
-	main.cpp
+	src/main.cpp
 	src/core/entrypoint.cpp
 	src/core/application.cpp src/core/application.h
 	src/utils/stbimpl.cpp
@@ -26,14 +26,20 @@ add_executable(${PROJECT_NAME}
 	src/core/window.cpp src/core/window.h
 	src/render/graphics.cpp src/render/graphics.h
 	src/platform/vulkangraphics.cpp src/platform/vulkangraphics.h
+	src/render/shader.cpp src/render/shader.h
 )
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 #target_compile_options(ImageFX PUBLIC "-Wall")
 
-if (WIN32)
+if (MSVC)
 	target_compile_options(${PROJECT_NAME} PUBLIC "/utf-8")
-endif(WIN32)
+	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
+else()
+	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR})
+endif()
+
+target_compile_options(${PROJECT_NAME} PUBLIC "-Wall")
 
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
 
@@ -44,11 +50,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE dependencies/stb)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies)
 
 # find Vulkan SDK
-find_package( Vulkan REQUIRED )
+find_package( Vulkan REQUIRED COMPONENTS shaderc_combined)
 
 message( STATUS "Vulkan_LIBRARY: ${Vulkan_LIBRARY}" )
 message( STATUS "Vulkan_INCLUDE_DIRS: ${Vulkan_INCLUDE_DIRS}" )
 message( STATUS "Vulkan_VERSION: ${Vulkan_VERSION}" )
+message( STATUS "Vulkan_shaderc_combined_FOUND: ${Vulkan_shaderc_combined_FOUND}" )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 # Require Vulkan version ≥ 1.3.256 (earliest version when the Vulkan module was available)
@@ -74,3 +81,4 @@ else()
 
 endif()
 
+target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::shaderc_combined)
