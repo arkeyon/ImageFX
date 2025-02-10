@@ -28,6 +28,7 @@ add_executable(${PROJECT_NAME}
 	src/render/graphics.cpp src/render/graphics.h
 	src/platform/vulkangraphics.cpp src/platform/vulkangraphics.h
 	src/render/shader.cpp src/render/shader.h
+	src/core/definitions.cpp src/core/definitions.h
 )
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)

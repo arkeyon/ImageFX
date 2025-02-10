@@ -6,62 +6,62 @@
       "hidden": true,
       "generator": "Unix Makefiles",
       "environment": {
-          "CC":"/usr/bin/clang-18",
-          "CXX": "/usr/bin/clang++-18"
-    }
+        "CC": "/usr/bin/clang-18",
+        "CXX": "/usr/bin/clang++-18"
+      }
     },
     {
       "name": "linux-clang-debug",
-      "inherits":["default"],
+      "inherits": [ "default" ],
       "displayName": "linux clang debug",
       "description": "linux clang debug build",
       "binaryDir": "build/linux/clang/debug",
       "cacheVariables": {
-          "CMAKE_BUILD_TYPE": "Debug"
-    }
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
     },
     {
       "name": "linux-clang-release",
-      "inherits":["default"],
+      "inherits": [ "default" ],
       "displayName": "linux clang release",
       "description": "linux clang release build",
       "binaryDir": "build/linux/clang/release",
       "cacheVariables": {
-          "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "linux-clang-dist",
-      "inherits":["default"],
+      "inherits": [ "default" ],
       "displayName": "linux clang dist",
       "description": "linux clang dist build",
       "binaryDir": "build/linux/clang/dist",
       "cacheVariables": {
-          "CMAKE_BUILD_TYPE": "MinSizeRel"
+        "CMAKE_BUILD_TYPE": "MinSizeRel"
       }
     },
     {
       "name": "windows-msvc-debug",
-      "inherits": [ "default" ],
       "displayName": "windows msvc debug",
       "description": "windows msvc debug build",
       "binaryDir": "build/windows/msvc",
       "generator": "Visual Studio 17 2022",
       "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug",
         "CMAKE_BUILD_TYPE": "Debug",
-        "RUNTIME_OUTPUT_DIRECTORY":  "build/windows/msvc/Debug"
+        "VS_STARTUP_PROJECT": "ImageFX"
       }
     },
     {
       "name": "windows-msvc-release",
-      "inherits": [ "default" ],
       "displayName": "windows msvc release",
       "description": "windows msvc release build",
       "binaryDir": "build/windows/msvc",
       "generator": "Visual Studio 17 2022",
       "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Release",
         "CMAKE_BUILD_TYPE": "Release",
-        "RUNTIME_OUTPUT_DIRECTORY": "build/windows/msvc/Release"
+        "VS_STARTUP_PROJECT": "ImageFX"
       }
     }
 
