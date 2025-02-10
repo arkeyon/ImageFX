@@ -1,5 +1,8 @@
 
 
+#include "glm/glm/fwd.hpp"
+#include <array>
+#include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
@@ -39,6 +42,15 @@ namespace saf {
         vk::Semaphore     swapchain_release_semaphore;
     };
 
+    struct Vertex {
+        glm::vec2 pos;
+        glm::vec3 color;
+
+        static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
+            return { vk::VertexInputBindingDescription(0, sizeof(Vertex)) };
+        }
+    };
+
 	class Graphics {
 	public:
         Graphics();
@@ -63,12 +75,24 @@ namespace saf {
         void CreateRenderPass();
         void CreatePipeline();
         void CreateFramebuffers();
+        void CreateVertexBuffer();
         void RenderTri(uint32_t index);
 
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);
 
         uint32_t m_Width;
         uint32_t m_Height;
+
+        std::array<Vertex, 4> m_VertexBuffer = {
+            Vertex{glm::vec2(0.0f, -0.5f), glm::vec3(0.2, 0.2, 0.2)},
+            Vertex{glm::vec2(0.7f, 0.5f), glm::vec3(1.0, 1.0, 1.0)},
+            Vertex{glm::vec2(-0.5f, 0.5f), glm::vec3(0.7, 0.7, 0.7)},
+        };
+
+        vk::Buffer m_vkVertexBuffer = nullptr;
+        vk::DeviceMemory m_vkVertexBufferMemory;
+
+        Vertex* m_VertexArrayTransformed;
 
         std::vector<const char*> m_vkLayers{};
         std::vector<const char*> m_vkExtensions{};

@@ -3,8 +3,6 @@
 
 #include "utils/log.h"
 
-#include "glm/glm/glm.hpp"
-
 #include <stddef.h>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
@@ -14,12 +12,12 @@ namespace saf {
     Window::Window(uint32_t width, uint32_t height, const char* title)
         : m_Width(width), m_Height(height), m_Title(title)
     {
+        m_Graphics = std::make_unique<Graphics>();
 
     }
 
     Window::~Window()
     {
-        m_Graphics = std::make_unique<Graphics>();
 
         if (m_glfwWindow) glfwDestroyWindow(m_glfwWindow);
         glfwTerminate();

@@ -1,8 +1,12 @@
+#include "glm/glm/fwd.hpp"
 #include "safpch.h"
 #include "graphics.h"
 
+#include <cstring>
 #include <fstream>
 #include <shaderc/shaderc.h>
+#include <vulkan/vulkan_enums.hpp>
+#include <vulkan/vulkan_structs.hpp>
 
 namespace saf {
 
@@ -144,19 +148,28 @@ namespace saf {
 
         CreateSwapchain();
 
-
         CreateRenderPass();
         CreateFramebuffers();
 
         m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
 
         CreatePipeline();
+
+        CreateVertexBuffer();
 	}
 
 	void Graphics::Destroy()
 	{
+
+        if (m_vkVertexBufferMemory)
+        {
+            m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
+            m_vkDevice.freeMemory(m_vkVertexBufferMemory);
+        }
+        
         if (m_vkDevice) m_vkDevice.waitIdle();
 
+        if (m_vkVertexBuffer)m_vkDevice.destroyBuffer(m_vkVertexBuffer);
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
@@ -168,8 +181,38 @@ namespace saf {
         if (m_vkInstance) m_vkInstance.destroy();
 	}
 
+    void printFPS() {
+        static auto oldTime = std::chrono::high_resolution_clock::now();
+        static int fps; fps++;
+
+        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
+            oldTime = std::chrono::high_resolution_clock::now();
+            IFX_TRACE("FPS: {0}", fps);
+            fps = 0;
+        }
+    }
+
     void Graphics::Render()
     {
+
+        //printFPS();
+
+        static float angle = 0.f;
+        angle += 0.001f;
+
+        //Vertex* vertices = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, m_VertexBuffer.size() * sizeof(Vertex)));
+
+        for (int i = 0; i < 3; i++)
+        {
+            auto& pos = m_VertexBuffer[i].pos;
+            m_VertexArrayTransformed[i].pos.x = pos.x * cosf(angle) - pos.y * sinf(angle);
+            m_VertexArrayTransformed[i].pos.y = pos.x * sinf(angle) + pos.y * cosf(angle);
+
+            m_VertexArrayTransformed[i].color = m_VertexBuffer[i].color;
+        }
+
+        //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
+
         vk::Semaphore acquire_semaphore;
         if (m_vkRecycleSemaphores.empty())
         {
@@ -270,6 +313,8 @@ namespace saf {
         vk::Rect2D scissor({ 0, 0 }, { m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height });
         // Set scissor dynamically
         cmd.setScissor(0, scissor);
+
+        cmd.bindVertexBuffers(0, {m_vkVertexBuffer}, {0});
 
         // Draw three vertices with one instance.
         cmd.draw(3, 1, 0, 0);
@@ -681,15 +726,6 @@ namespace saf {
 
     }
 
-    struct Vertex {
-        glm::vec2 pos;
-        glm::vec3 color;
-
-        static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
-            return { vk::VertexInputBindingDescription(0, sizeof(Vertex)) };
-        }
-    };
-
     void Graphics::CreatePipeline()
     {
         IFX_TRACE("Window CreatePipeline");
@@ -697,15 +733,14 @@ namespace saf {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, create_shader_module(m_vkDevice, "assets/shaders/triangle.vert"), "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, create_shader_module(m_vkDevice, "assets/shaders/triangle.frag"), "main") };
 
-        //std::array<vk::VertexInputAttributeDescription, 2> vertex_input_attrb_descs{
-        //    vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos)),
-        //    vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color))
-        //};
+        std::array<vk::VertexInputAttributeDescription, 2> vertex_input_attrb_descs{
+            vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos)),
+            vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color))
+        };
 
-        //auto vertex_input_binding_descs = Vertex::getBindingDescription();
+        auto vertex_input_binding_descs = Vertex::getBindingDescription();
 
-        //vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrb_descs);
-        vk::PipelineVertexInputStateCreateInfo vertex_input;
+        vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrb_descs);
 
         // Our attachment will write to all color channels, but no blending is enabled.
         vk::PipelineColorBlendAttachmentState blend_attachment;
@@ -749,6 +784,39 @@ namespace saf {
             vk::FramebufferCreateInfo framebuffer_create_info({}, m_vkRenderpass, { image_view }, m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height, 1);
             m_vkSwapchainData.framebuffers.push_back(m_vkDevice.createFramebuffer(framebuffer_create_info));
         }
+    }
+
+    uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+        vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
+
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
+    }
+
+    void Graphics::CreateVertexBuffer()
+    {
+        auto vertex_buffer_create_info = vk::BufferCreateInfo({}, sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, 1);
+        m_vkVertexBuffer = m_vkDevice.createBuffer(vertex_buffer_create_info);
+        if (!m_vkVertexBuffer) IFX_ERROR("Vulkan failed to create vertex buffer");
+
+        vk::MemoryRequirements memory_requirements = m_vkDevice.getBufferMemoryRequirements(m_vkVertexBuffer);
+
+        uint32_t memory_type_index = findMemoryType(m_vkPhysicalDevice, memory_requirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible);
+        vk::MemoryAllocateInfo memory_allocate_info(memory_requirements.size, memory_type_index);
+
+        m_vkVertexBufferMemory = m_vkDevice.allocateMemory(memory_allocate_info);
+
+        m_vkDevice.bindBufferMemory(m_vkVertexBuffer, m_vkVertexBufferMemory, 0);
+
+        m_VertexArrayTransformed = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, vertex_buffer_create_info.size));
+        //memcpy(pdata, m_VertexBuffer.data(), vertex_buffer_create_info.size);
+        //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
+
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)
