@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdexcept>
 #include <vector>
 
 #include <vulkan/vulkan.hpp>
@@ -49,13 +48,14 @@ namespace saf {
     /*
     Vulkan Execution:
 
-    - query layer/extention support
-    - create instance
+    - create instance (checking layer / extention support)
     - set physical device
     - find graphics queue family that supports graphics and preset
     - create logical device
     - create swapchain
-    - 
+    - create render pass
+    - create framebuffers
+    - create shader pipeline
     */
 
     inline vk::ShaderModule create_shader_module(vk::Device device, std::string path)

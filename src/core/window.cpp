@@ -60,11 +60,12 @@ namespace saf {
 
         CreateSwapchain();
 
-        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
 
         CreateRenderPass();
         CreateFramebuffers();
 
+        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
+        
         CreatePipeline();
     }
 
