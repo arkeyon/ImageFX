@@ -160,16 +160,14 @@ namespace saf {
 
 	void Graphics::Destroy()
 	{
+        if (m_vkDevice) m_vkDevice.waitIdle();
 
+        if (m_vkVertexBuffer)m_vkDevice.destroyBuffer(m_vkVertexBuffer);
         if (m_vkVertexBufferMemory)
         {
             m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
             m_vkDevice.freeMemory(m_vkVertexBufferMemory);
         }
-        
-        if (m_vkDevice) m_vkDevice.waitIdle();
-
-        if (m_vkVertexBuffer)m_vkDevice.destroyBuffer(m_vkVertexBuffer);
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
@@ -195,7 +193,7 @@ namespace saf {
     void Graphics::Render()
     {
 
-        //printFPS();
+        printFPS();
 
         static float angle = 0.f;
         angle += 0.001f;
