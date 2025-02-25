@@ -8,6 +8,8 @@
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
+#include <vk_mem_alloc.h>
+
 namespace saf {
 
     vk::ShaderModule create_shader_module(vk::Device device, std::string path)
