@@ -13,6 +13,8 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm/glm.hpp>
 
+#include <vk_mem_alloc.h>
+
 namespace saf { 
 
     struct SurfaceDetails
@@ -109,6 +111,9 @@ namespace saf {
         vk::Pipeline m_vkPipeline = nullptr;
         std::vector<FrameData> m_vkFramesData{};
         std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
+
+        VmaAllocator m_vmaAllocator;
+        VmaAllocation m_vmaAllocation;
 	};
 
 }

@@ -144,6 +144,20 @@ namespace saf {
 
         CreateDevice();
 
+        VmaVulkanFunctions vulkanFunctions = {};
+        vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+        VmaAllocatorCreateInfo vma_alloc_create_info = {};
+        vma_alloc_create_info.device = m_vkDevice;
+        vma_alloc_create_info.flags = VmaAllocatorCreateFlagBits::VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+        vma_alloc_create_info.instance = m_vkInstance;
+        vma_alloc_create_info.physicalDevice = m_vkPhysicalDevice;
+        vma_alloc_create_info.vulkanApiVersion = VK_API_VERSION_1_4;
+        vma_alloc_create_info.pVulkanFunctions = &vulkanFunctions;
+
+        VKCHECK(vmaCreateAllocator(&vma_alloc_create_info, &m_vmaAllocator));
+
         m_vkQueue = m_vkDevice.getQueue(m_vkGraphicsQueueIndex, 0);
 
         CreateSwapchain();
@@ -162,17 +176,19 @@ namespace saf {
 	{
         if (m_vkDevice) m_vkDevice.waitIdle();
 
-        if (m_vkVertexBuffer)m_vkDevice.destroyBuffer(m_vkVertexBuffer);
-        if (m_vkVertexBufferMemory)
+        if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaAllocation);
+        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaAllocation);
+        /*if (m_vkVertexBufferMemory)
         {
             m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
             m_vkDevice.freeMemory(m_vkVertexBufferMemory);
-        }
+        }*/
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
         if (m_vkPipelineLayout) m_vkDevice.destroyPipelineLayout(m_vkPipelineLayout);
         if (m_vkRenderpass) m_vkDevice.destroyRenderPass(m_vkRenderpass);
+        if (m_vmaAllocator) vmaDestroyAllocator(m_vmaAllocator);
         if (m_vkDevice) m_vkDevice.destroy();
         if (m_vkSurface) m_vkInstance.destroySurfaceKHR(m_vkSurface);
         if (m_vkMessenger) m_vkInstance.destroyDebugUtilsMessengerEXT(m_vkMessenger);
@@ -798,6 +814,7 @@ namespace saf {
 
     void Graphics::CreateVertexBuffer()
     {
+        /*
         auto vertex_buffer_create_info = vk::BufferCreateInfo({}, sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, 1);
         m_vkVertexBuffer = m_vkDevice.createBuffer(vertex_buffer_create_info);
         if (!m_vkVertexBuffer) IFX_ERROR("Vulkan failed to create vertex buffer");
@@ -814,6 +831,20 @@ namespace saf {
         m_VertexArrayTransformed = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, vertex_buffer_create_info.size));
         //memcpy(pdata, m_VertexBuffer.data(), vertex_buffer_create_info.size);
         //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
+        */
+
+        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        bufferInfo.size = sizeof(Vertex) * m_VertexBuffer.size();
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        VKCHECK(vmaCreateBuffer(m_vmaAllocator, &bufferInfo, &allocInfo, reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer), &m_vmaAllocation, nullptr));
+
+        VKCHECK(vmaMapMemory(m_vmaAllocator, m_vmaAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
+
 
     }
 
