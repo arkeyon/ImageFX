@@ -2,7 +2,7 @@
 #include <cstddef>
 #define SAF_ASSERT assert
 
-#ifdef __msvc__
+#ifdef _MSC_VER
 #define VKCHECK(x) (SAF_ASSERT(x == VK_SUCCESS, #x))
 #endif
 
