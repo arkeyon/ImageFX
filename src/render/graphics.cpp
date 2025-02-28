@@ -89,7 +89,6 @@ namespace saf {
         vk::PipelineMultisampleStateCreateInfo multisample_state({}, vk::SampleCountFlagBits::e1);
 
         vk::PipelineColorBlendStateCreateInfo color_blend_state({}, false, {}, blend_attachment_states);
-
         std::array<vk::DynamicState, 2>    dynamic_state_enables = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
         vk::PipelineDynamicStateCreateInfo dynamic_state({}, dynamic_state_enables);
 
