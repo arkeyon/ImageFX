@@ -5,7 +5,7 @@ DESCRIPTION "Image Effects Project"
 LANGUAGES CXX)
 
 
-set($ENV{VULKAN_SDK} "/home/arkeyon/Downloads/1.4.304.0/x86_64")
+#set($ENV{VULKAN_SDK} "/home/arkeyon/Downloads/1.4.304.0/x86_64")
 set($ENV{Vulkan_INCLUDE_DIRS} "${VULKAN_SDK}/include")
 set(Vulkan_INCLUDE_DIRS "${VULKAN_SDK}/include")
 

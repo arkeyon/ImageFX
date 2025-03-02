@@ -12,7 +12,7 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/glm/glm.hpp>
-
+#include <shaderc/shaderc.h>
 #include <vk_mem_alloc.h>
 
 namespace saf { 
@@ -67,12 +67,6 @@ namespace saf {
 
         void Render();
 	private:
-        void CreateInstance();
-        void CreateDebugMessenger();
-        void SetPhysicalDevice();
-        uint32_t FindQueueFamily(vk::QueueFlags flags, vk::SurfaceKHR surface = nullptr);
-        void CreateDevice();
-        void CreateSurface(GLFWwindow* glfw_window);
         void CreateSwapchain();
         void CreatePipeline();
         void CreateVertexBuffer();

@@ -4,123 +4,15 @@
 
 #include <cstring>
 #include <fstream>
-#include <shaderc/shaderc.h>
+
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_structs.hpp>
 
 #include <vk_mem_alloc.h>
 
+#include "platform/vulkangraphics.h"
+
 namespace saf {
-
-    vk::ShaderModule create_shader_module(vk::Device device, std::string path)
-    {
-        static const std::map<std::string, shaderc_shader_kind> shader_stage_map = { {"comp", shaderc_shader_kind::shaderc_compute_shader},
-                                                                                        {"frag", shaderc_shader_kind::shaderc_fragment_shader},
-                                                                                        {"geom", shaderc_shader_kind::shaderc_geometry_shader},
-                                                                                        {"tesc", shaderc_shader_kind::shaderc_tess_control_shader},
-                                                                                        {"tese", shaderc_shader_kind::shaderc_tess_evaluation_shader},
-                                                                                        {"vert", shaderc_shader_kind::shaderc_vertex_shader} };
-        auto compiler = shaderc_compiler_initialize();
-
-        std::ifstream file;
-        file.open(path);
-        if (!file) IFX_ERROR("Failed to load file: {0}", path);
-
-        std::string str;
-        std::string file_contents;
-        while (std::getline(file, str))
-        {
-            file_contents += str;
-            file_contents.push_back('\n');
-        }
-
-        IFX_TRACE("Shader src:\n{0}", file_contents);
-
-        std::string file_ext = path;
-
-        // Extract extension name from the glsl shader file
-        file_ext = file_ext.substr(file_ext.find_last_of(".") + 1);
-
-        // Compile the GLSL source
-        auto stageIt = shader_stage_map.find(file_ext);
-        if (stageIt == shader_stage_map.end())
-        {
-            IFX_ERROR("Vulkan file extension {0} does not have a vulkan shader stage.", file_ext);
-        }
-        shaderc_compilation_result_t compilation_result = shaderc_compile_into_spv(compiler, file_contents.c_str(), file_contents.size(), stageIt->second, path.c_str(), "main", nullptr);
-        if (shaderc_result_get_compilation_status(compilation_result) != shaderc_compilation_status_success) IFX_ERROR("ShaderC failed to compile: {0}", path);
-
-        size_t length = shaderc_result_get_length(compilation_result);
-        const uint32_t* spirv = (const uint32_t*)shaderc_result_get_bytes(compilation_result);
-
-        vk::ShaderModuleCreateInfo shader_module_create_info({}, length, spirv);
-
-        shaderc_compiler_release(compiler);
-
-        return device.createShaderModule(shader_module_create_info);
-    }
-
-    vk::Pipeline create_graphics_pipeline(vk::Device       device,
-        vk::PipelineCache                                         pipeline_cache,
-        std::vector<vk::PipelineShaderStageCreateInfo> const& shader_stages,
-        vk::PipelineVertexInputStateCreateInfo const& vertex_input_state,
-        vk::PrimitiveTopology                                     primitive_topology,
-        uint32_t                                                  patch_control_points,
-        vk::PolygonMode                                           polygon_mode,
-        vk::CullModeFlags                                         cull_mode,
-        vk::FrontFace                                             front_face,
-        std::vector<vk::PipelineColorBlendAttachmentState> const& blend_attachment_states,
-        vk::PipelineDepthStencilStateCreateInfo const& depth_stencil_state,
-        vk::PipelineLayout                                        pipeline_layout,
-        vk::Format                                                swapchain_format)
-    {
-        vk::PipelineInputAssemblyStateCreateInfo input_assembly_state({}, primitive_topology, false);
-
-        vk::PipelineTessellationStateCreateInfo tessellation_state({}, patch_control_points);
-
-        vk::PipelineViewportStateCreateInfo viewport_state({}, 1, nullptr, 1, nullptr);
-
-        vk::PipelineRasterizationStateCreateInfo rasterization_state;
-        rasterization_state.polygonMode = polygon_mode;
-        rasterization_state.cullMode = cull_mode;
-        rasterization_state.frontFace = front_face;
-        rasterization_state.lineWidth = 1.0f;
-
-        vk::PipelineMultisampleStateCreateInfo multisample_state({}, vk::SampleCountFlagBits::e1);
-
-        vk::PipelineColorBlendStateCreateInfo color_blend_state({}, false, {}, blend_attachment_states);
-        std::array<vk::DynamicState, 2>    dynamic_state_enables = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
-        vk::PipelineDynamicStateCreateInfo dynamic_state({}, dynamic_state_enables);
-
-        vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { swapchain_format }, vk::Format::eUndefined, vk::Format::eUndefined);
-        vk::GraphicsPipelineCreateInfo();
-        // Final fullscreen composition pass pipeline
-        vk::GraphicsPipelineCreateInfo pipeline_create_info(
-            {},
-            shader_stages,
-            &vertex_input_state,
-            &input_assembly_state,
-            &tessellation_state,
-            &viewport_state,
-            &rasterization_state,
-            &multisample_state,
-            &depth_stencil_state,
-            &color_blend_state,
-            &dynamic_state,
-            pipeline_layout,
-            nullptr,
-            {},
-            {},
-            -1
-        );
-        pipeline_create_info.pNext = &pipeline_rendering_create_info;
-
-        vk::Result   result;
-        vk::Pipeline pipeline;
-        std::tie(result, pipeline) = device.createGraphicsPipeline(pipeline_cache, pipeline_create_info);
-        assert(result == vk::Result::eSuccess);
-        return pipeline;
-    }
 
     Graphics::Graphics()
     {
@@ -137,18 +29,36 @@ namespace saf {
 	{
         m_Width = width;
         m_Height = height;
-        CreateInstance();
-        CreateDebugMessenger();
-        CreateSurface(glfw_window);
-        SetPhysicalDevice();
 
-        if ((m_vkGraphicsQueueIndex = FindQueueFamily(vk::QueueFlagBits::eGraphics, m_vkSurface)) == UINT32_MAX)
+        uint32_t glfw_extension_count = 0;
+        const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+        if (!glfw_extensions) IFX_ERROR("Vulkan not supported, glfw failed to fetch required extensions!");
+        for (int n = 0; n < glfw_extension_count; ++n) m_vkExtensions.emplace_back(glfw_extensions[n]);
+
+        m_vkInstance = vkhelper::CreateInstance(m_vkExtensions, m_vkLayers);
+        m_vkMessenger = vkhelper::CreateDebugMessenger(m_vkInstance);
+        
+        ERR_GUARD_VULKAN(glfwCreateWindowSurface(m_vkInstance, glfw_window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&m_vkSurface)));
+        if (!m_vkSurface) IFX_ERROR("Vulkan failed to create glfw surface");
+
+        m_vkPhysicalDevice = vkhelper::SelectPhysicalDevice(m_vkInstance);
+
+        if ((m_vkGraphicsQueueIndex = vkhelper::FindQueueFamily(m_vkInstance, m_vkPhysicalDevice, vk::QueueFlagBits::eGraphics, m_vkSurface)) == UINT32_MAX)
         {
             IFX_ERROR("Window failed FindQueueFamily present");
         }
         else IFX_TRACE("Window FindQueueFamily present found at index: {0}", m_vkGraphicsQueueIndex);
 
-        CreateDevice();
+        m_vkDevice = vkhelper::CreateLogicalDevice(
+            m_vkInstance,
+            m_vkPhysicalDevice,
+            m_vkGraphicsQueueIndex,
+            {},
+            {
+                "VK_KHR_swapchain",
+                "VK_KHR_dynamic_rendering",
+                "VK_KHR_dedicated_allocation"
+            });
 
         VmaVulkanFunctions vulkanFunctions = {};
         vulkanFunctions.vkGetInstanceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr;
@@ -385,236 +295,11 @@ namespace saf {
         m_vkQueue.submit(info, m_vkFramesData[index].queue_submit_fence);
     }
 
-    void Graphics::CreateInstance()
-    {
-        IFX_TRACE("Window CreateInstance");
-        uint32_t glfw_extension_count = 0;
-        const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-
-        VULKAN_HPP_DEFAULT_DISPATCHER.init();
-
-        for (int n = 0; n < glfw_extension_count; ++n) m_vkExtensions.emplace_back(glfw_extensions[n]);
-
-        auto supported_extentions = vk::enumerateInstanceExtensionProperties();
-
-        auto required_extention_not_found = std::find_if(m_vkExtensions.begin(),
-            m_vkExtensions.end(),
-            [&supported_extentions](auto extension) {
-                return std::find_if(supported_extentions.begin(),
-                    supported_extentions.end(),
-                    [&extension](auto const& ep) {
-                        return strcmp(ep.extensionName, extension) == 0;
-                    }) == supported_extentions.end();
-            });
-
-        if (required_extention_not_found != m_vkExtensions.end())
-        {
-            IFX_ERROR("Vulkan did not find the following required extentions:");
-            for (; required_extention_not_found != m_vkExtensions.end(); ++required_extention_not_found)
-            {
-                IFX_ERROR("\t{0}", *required_extention_not_found);
-            }
-            IFX_ERROR("Vulkan missing required extention(s)");
-        }
-
-        auto supported_layers = vk::enumerateInstanceLayerProperties();
-
-        auto required_layer_not_found = std::find_if(m_vkLayers.begin(),
-            m_vkLayers.end(),
-            [&supported_layers](auto extension) {
-                return std::find_if(supported_layers.begin(),
-                    supported_layers.end(),
-                    [&extension](auto const& ep) {
-                        return strcmp(ep.layerName, extension) == 0;
-                    }) == supported_layers.end();
-            });
-
-        if (required_layer_not_found != m_vkLayers.end())
-        {
-            IFX_ERROR("Vulkan did not find the following required layers:");
-            for (; required_layer_not_found != m_vkLayers.end(); ++required_layer_not_found)
-            {
-                IFX_ERROR("\t{0}", *required_layer_not_found);
-            }
-            IFX_ERROR("Vulkan missing required layer(s)");
-        }
-
-        const vk::ApplicationInfo applicationInfo(g_EngineName, VK_MAKE_API_VERSION(0, 1, 0, 0), g_ApplicationName, VK_MAKE_API_VERSION(0, 1, 3, 0), VK_API_VERSION_1_3);
-        const vk::InstanceCreateInfo createinfo(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, &applicationInfo, m_vkLayers.size(), m_vkLayers.data(), m_vkExtensions.size(), m_vkExtensions.data());
-        m_vkInstance = vk::createInstance(createinfo);
-
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(m_vkInstance);
-    }
-
-    void Graphics::CreateDebugMessenger()
-    {
-        IFX_TRACE("Window CreateDebugMessenger");
-        vk::DebugUtilsMessengerCreateInfoEXT messengercreateinfo({}, vk::FlagTraits<vk::DebugUtilsMessageSeverityFlagBitsEXT>::allFlags, vk::FlagTraits<vk::DebugUtilsMessageTypeFlagBitsEXT>::allFlags,
-            [](VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
-            {
-
-
-                switch (messageSeverity)
-                {
-                case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: IFX_TRACE("Vulkan Debug {0}", pCallbackData->pMessage); break;
-                case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: IFX_INFO("Vulkan Debug {0}", pCallbackData->pMessage); break;
-                case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: IFX_WARN("Vulkan Debug {0}", pCallbackData->pMessage); break;
-                case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: IFX_ERROR("Vulkan Debug {0}", pCallbackData->pMessage); break;
-                case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT: break;
-                }
-
-                return VK_FALSE;
-            });
-        m_vkMessenger = m_vkInstance.createDebugUtilsMessengerEXT(messengercreateinfo);
-        if (!m_vkMessenger) IFX_ERROR("Vulkan failed to create debug messenger");
-    }
-
     bool IsDevicesSuitable(vk::PhysicalDevice device)
     {
-        auto properties = device.getProperties();
-        IFX_TRACE("Device: {0}", properties.deviceName.data());
-
-        switch (properties.deviceType)
-        {
-        case vk::PhysicalDeviceType::eCpu:              IFX_TRACE("\tType: CPU"); break;
-        case vk::PhysicalDeviceType::eDiscreteGpu:      IFX_TRACE("\tType: Descrete GPU"); break;
-        case vk::PhysicalDeviceType::eIntegratedGpu:    IFX_TRACE("\tType: Integrated GPU"); break;
-        case vk::PhysicalDeviceType::eVirtualGpu:       IFX_TRACE("\tType: Virtual GPU"); break;
-        case vk::PhysicalDeviceType::eOther:            IFX_TRACE("\tType: Unknown"); break;
-        }
-
-        std::string vendor = "UNKNOWN";
-
-        switch (properties.vendorID)
-        {
-        case 0x1002: IFX_TRACE("\tVendorID: 0x1002 (AMD)"); vendor = "AMD"; break;
-        case 0x1010: IFX_TRACE("\tVendorID: 0x1010 (ImgTec)"); vendor = "ImgTec"; break;
-        case 0x10DE: IFX_TRACE("\tVendorID: 0x10DE (NVIDIA)"); vendor = "NVIDIA"; break;
-        case 0x13B5: IFX_TRACE("\tVendorID: 0x13B5 (ARM)"); vendor = "ARM"; break;
-        case 0x5143: IFX_TRACE("\tVendorID: 0x5143 (Qualcomm)"); vendor = "Qualcomm"; break;
-        case 0x8086: IFX_TRACE("\tVendorID: 0x8086 (INTEL)"); vendor = "INTEL"; break;
-        }
-
-        IFX_TRACE("\tVersion: {0}.{1}.{2}", VK_VERSION_MAJOR(properties.driverVersion), VK_VERSION_MINOR(properties.driverVersion), VK_VERSION_PATCH(properties.driverVersion));
-        IFX_TRACE("\tAPIVersion: {0}.{1}.{2}", VK_VERSION_MAJOR(properties.apiVersion), VK_VERSION_MINOR(properties.apiVersion), VK_VERSION_PATCH(properties.apiVersion));
+        
 
         return true;
-    }
-
-    void Graphics::SetPhysicalDevice()
-    {
-        IFX_TRACE("Window SetPhysicalDevice");
-        std::vector<vk::PhysicalDevice> devices = m_vkInstance.enumeratePhysicalDevices();
-        if (devices.empty()) IFX_ERROR("Vulkan didnt find any physical devices");
-
-        m_vkPhysicalDevice = *std::find_if(devices.begin(), devices.end(), IsDevicesSuitable);
-    }
-
-    uint32_t Graphics::FindQueueFamily(vk::QueueFlags flags, vk::SurfaceKHR surface)
-    {
-        IFX_TRACE("Window FindQueueFamily");
-        if (!m_vkPhysicalDevice)
-        {
-            IFX_ERROR("Vulkan no physical device set");
-            return UINT32_MAX;
-        }
-
-        std::vector<vk::QueueFamilyProperties> queue_family_properties = m_vkPhysicalDevice.getQueueFamilyProperties();
-
-        if (queue_family_properties.empty())
-        {
-            IFX_WARN("Vulkan no queue families found on current physical device");
-            return UINT32_MAX;
-        }
-
-        static bool first = true;
-
-        if (first) IFX_TRACE("Vulkan {0} queue families found on current physical device", queue_family_properties.size());
-
-        bool queue_found = false;
-        int queue_index = UINT32_MAX;
-        int i = 0;
-        for (auto qfp : queue_family_properties)
-        {
-            if (qfp.queueCount == 0) continue;
-
-            bool can_preset = false;
-            bool has_flags = false;
-
-            if (qfp.queueFlags & flags) has_flags = true;
-            if (surface && m_vkPhysicalDevice)
-            {
-                //if (m_vkPhysicalDevice.getSurfaceSupportKHR(i, surface) == VK_SUCCESS) can_preset = true;
-                if (glfwGetPhysicalDevicePresentationSupport(static_cast<VkInstance>(m_vkInstance), static_cast<VkPhysicalDevice>(m_vkPhysicalDevice), i) == GLFW_TRUE) can_preset = true;
-            }
-
-            if (has_flags && (can_preset || !surface))
-            {
-                queue_found = true;
-                queue_index = i;
-            }
-
-            if (first)
-            {
-                IFX_TRACE("Queue family {0}", i);
-                std::string supports;
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eCompute) supports += "compute";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eGraphics) supports += supports.empty() ? "graphics" : ", graphics";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eOpticalFlowNV) supports += supports.empty() ? "opticalflownv" : ", opticalflownv";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eProtected) supports += supports.empty() ? "protected" : ", protected";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eSparseBinding) supports += supports.empty() ? "sparsebinding" : ", sparsebinding";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eTransfer) supports += supports.empty() ? "transfer" : ", transfer";
-                if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eVideoDecodeKHR) supports += supports.empty() ? "videodecode" : ", videodecode";
-                //if (qfp.queueFlags & qfp.queueFlags & vk::QueueFlagBits::eVideoEncodeKHR) supports += supports.empty() ? "videoencode" : ", videoencode";
-                IFX_TRACE("\tSupports: {0}", supports);
-                IFX_TRACE("\tFamily supports {0} queue{1}", qfp.queueCount, qfp.queueCount > 1 ? "s" : "");
-
-            }
-            else if (queue_found) return i;
-
-            ++i;
-        }
-        first = false;
-
-        if (queue_found) return queue_index;
-
-        return UINT32_MAX;
-    }
-
-    void Graphics::CreateDevice()
-    {
-        IFX_TRACE("Window CreateDevice");
-        std::array<const char*, 3> extensions = {
-            "VK_KHR_swapchain",
-            "VK_KHR_dynamic_rendering",
-            "VK_KHR_dedicated_allocation"
-        };
-
-        float queue_priority = 1.f;
-        const vk::DeviceQueueCreateInfo queue_create_info({}, m_vkGraphicsQueueIndex, 1, &queue_priority);
-        const vk::PhysicalDeviceFeatures device_features{};
-        vk::PhysicalDeviceDynamicRenderingFeatures device_dynamic_features {};
-        device_dynamic_features.dynamicRendering = VK_TRUE;
-        const vk::DeviceCreateInfo device_create_info({}, 1, &queue_create_info, static_cast<uint32_t>(m_vkLayers.size()), m_vkLayers.data(), static_cast<uint32_t>(extensions.size()), extensions.data(), &device_features, &device_dynamic_features);
-        
-        m_vkDevice = m_vkPhysicalDevice.createDevice(device_create_info);
-
-        if (!m_vkDevice)
-        {
-            IFX_ERROR("Vulkan failed to create logical device");
-        }
-
-        VULKAN_HPP_DEFAULT_DISPATCHER.init(m_vkDevice);
-    }
-
-    void Graphics::CreateSurface(GLFWwindow* glfw_window)
-    {
-        IFX_TRACE("Window CreateSurface");
-        VkResult result = glfwCreateWindowSurface(m_vkInstance, glfw_window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&m_vkSurface));
-        if (result != VK_SUCCESS || !m_vkSurface)
-        {
-            IFX_ERROR("Vulkan failed to create glfw surface");
-        }
     }
 
     void Graphics::CreateSwapchain()
@@ -677,24 +362,37 @@ namespace saf {
         m_vkSwapchainData.extent = extent;
         vk::SwapchainKHR old_swapchain = m_vkSwapchainData.swapchain;
 
-        // FIFO must be supported by all implementations.
-        vk::PresentModeKHR swapchain_present_mode = vk::PresentModeKHR::eMailbox;
-        //vk::PresentModeKHR swapchain_present_mode = vk::PresentModeKHR::eFifo;
+        vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
+        for (const auto mode : supported_preset_modes)
+        {
+            if (mode == vk::PresentModeKHR::eMailbox)
+            {
+                present_mode = mode;
+                break;
+            }
+        }
 
-        vk::SwapchainCreateInfoKHR swapchain_create_info;
-        swapchain_create_info.surface = m_vkSurface;
-        swapchain_create_info.minImageCount = desired_swapchain_images;
-        swapchain_create_info.imageFormat = image_format.format;
-        swapchain_create_info.imageColorSpace = image_format.colorSpace;
-        swapchain_create_info.imageExtent = extent;
-        swapchain_create_info.imageArrayLayers = 1;
-        swapchain_create_info.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
-        swapchain_create_info.imageSharingMode = vk::SharingMode::eExclusive;
-        swapchain_create_info.preTransform = pre_transform;
-        swapchain_create_info.compositeAlpha = composite;
-        swapchain_create_info.presentMode = swapchain_present_mode;
-        swapchain_create_info.clipped = true;
-        swapchain_create_info.oldSwapchain = old_swapchain;
+        if (present_mode == vk::PresentModeKHR::eFifo) IFX_TRACE("Vulkan physical device doesnt support mailbox present mode, defaulting to FiFo");
+        else IFX_TRACE("Vulkan using mailbox present mode");
+
+        vk::SwapchainCreateInfoKHR swapchain_create_info(
+            {},                                                 //flags_                 = {}
+            m_vkSurface,                                        //surface_               = {}
+            desired_swapchain_images,                           //minImageCount_         = {}
+            image_format.format,                                //imageFormat_           = VULKAN_HPP_NAMESPACE::Format::eUndefined
+            image_format.colorSpace,                            //imageColorSpace_       = VULKAN_HPP_NAMESPACE::ColorSpaceKHR::eSrgbNonlinear
+            extent,                                             //imageExtent_           = {}
+            1,                                                  //imageArrayLayers_      = {}
+            vk::ImageUsageFlagBits::eColorAttachment,           //imageUsage_            = {},
+            vk::SharingMode::eExclusive,                        //imageSharingMode_      = VULKAN_HPP_NAMESPACE::SharingMode::eExclusive,
+            {},                                                 //queueFamilyIndexCount_ = {},
+            {},                                                 //pQueueFamilyIndices_   = {},
+            pre_transform,                                      //preTransform_          = VULKAN_HPP_NAMESPACE::SurfaceTransformFlagBitsKHR::eIdentity,
+            composite,                                          //compositeAlpha_        = VULKAN_HPP_NAMESPACE::CompositeAlphaFlagBitsKHR::eOpaque,
+            present_mode,                                       //presentMode_           = VULKAN_HPP_NAMESPACE::PresentModeKHR::eImmediate,
+            VK_TRUE,                                            //clipped_               = {},
+            old_swapchain                                       //oldSwapchain_          = {},
+        );
 
         m_vkSwapchainData.swapchain = m_vkDevice.createSwapchainKHR(swapchain_create_info);
         if (!m_vkSwapchainData.swapchain) IFX_ERROR("Vulkan failed to create swapchain");
@@ -738,9 +436,21 @@ namespace saf {
     void Graphics::CreatePipeline()
     {
         IFX_TRACE("Window CreatePipeline");
-        std::vector<vk::PipelineShaderStageCreateInfo> shader_stages{
-        vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, create_shader_module(m_vkDevice, "assets/shaders/triangle.vert"), "main"),
-        vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, create_shader_module(m_vkDevice, "assets/shaders/triangle.frag"), "main") };
+        std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
+        {
+            vk::PipelineShaderStageCreateInfo(
+                {},
+                vk::ShaderStageFlagBits::eVertex,
+                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/triangle.vert"),
+                "main"
+            ),
+            vk::PipelineShaderStageCreateInfo(
+                {},
+                vk::ShaderStageFlagBits::eFragment,
+                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/triangle.frag"),
+                "main"
+            )
+        };
 
         std::array<vk::VertexInputAttributeDescription, 2> vertex_input_attrb_descs{
             vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos)),
@@ -753,12 +463,17 @@ namespace saf {
 
         // Our attachment will write to all color channels, but no blending is enabled.
         vk::PipelineColorBlendAttachmentState blend_attachment;
-        blend_attachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+        blend_attachment.colorWriteMask =
+            vk::ColorComponentFlagBits::eR |
+            vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB |
+            vk::ColorComponentFlagBits::eA;
 
         // Disable all depth testing.
         vk::PipelineDepthStencilStateCreateInfo depth_stencil;
 
-        m_vkPipeline = create_graphics_pipeline(m_vkDevice,
+        m_vkPipeline = vkhelper::CreateGraphicsPipeline(
+            m_vkDevice,
             nullptr,
             shader_stages,
             vertex_input,
@@ -770,7 +485,8 @@ namespace saf {
             { blend_attachment },
             depth_stencil,
             m_vkPipelineLayout,
-            m_vkSwapchainData.format);        // We need to specify the pipeline layout
+            m_vkSwapchainData.format
+        );        // We need to specify the pipeline layout
 
         if (!m_vkPipeline) IFX_ERROR("Vulkan failed to create graphics pipeline");
         // Pipeline is baked, we can delete the shader modules now.
@@ -810,7 +526,14 @@ namespace saf {
         allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        VkResult res = vmaCreateBuffer(m_vmaAllocator, &bufferInfo, &allocInfo, reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer), &m_vmaAllocation, nullptr);
+        VkResult res = vmaCreateBuffer(
+            m_vmaAllocator,
+            &bufferInfo,
+            &allocInfo,
+            reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer),
+            &m_vmaAllocation,
+            nullptr
+        );
 
         ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
     }
@@ -854,9 +577,6 @@ namespace saf {
             }
         }
         m_vkFramesData.clear();
-
-        //for (vk::Framebuffer framebuffer : m_vkSwapchainData.framebuffers) { m_vkDevice.destroyFramebuffer(framebuffer); }
-        //m_vkSwapchainData.framebuffers.clear();
 
         m_vkDevice.destroySwapchainKHR(swapchain);
     }
