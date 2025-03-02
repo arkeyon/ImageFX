@@ -32,7 +32,7 @@ namespace saf {
         vk::Format                   format = vk::Format::eUndefined;
         vk::SwapchainKHR             swapchain = nullptr;
         std::vector<vk::ImageView>   image_views;
-        std::vector<vk::Framebuffer> framebuffers;
+        //std::vector<vk::Framebuffer> framebuffers;
     };
 
     struct FrameData
@@ -74,27 +74,25 @@ namespace saf {
         void CreateDevice();
         void CreateSurface(GLFWwindow* glfw_window);
         void CreateSwapchain();
-        void CreateRenderPass();
         void CreatePipeline();
-        void CreateFramebuffers();
         void CreateVertexBuffer();
         void RenderTri(uint32_t index);
 
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);
 
-        uint32_t m_Width;
-        uint32_t m_Height;
+        uint32_t m_Width{};
+        uint32_t m_Height{};
 
-        std::array<Vertex, 4> m_VertexBuffer = {
+        std::array<Vertex, 3> m_VertexBuffer = {
             Vertex{glm::vec2(0.0f, -0.5f), glm::vec3(0.2, 0.2, 0.2)},
             Vertex{glm::vec2(0.7f, 0.5f), glm::vec3(1.0, 1.0, 1.0)},
             Vertex{glm::vec2(-0.5f, 0.5f), glm::vec3(0.7, 0.7, 0.7)},
         };
 
         vk::Buffer m_vkVertexBuffer = nullptr;
-        vk::DeviceMemory m_vkVertexBufferMemory;
+        vk::DeviceMemory m_vkVertexBufferMemory = nullptr;
 
-        Vertex* m_VertexArrayTransformed;
+        Vertex* m_VertexArrayTransformed = nullptr;
 
         std::vector<const char*> m_vkLayers{};
         std::vector<const char*> m_vkExtensions{};
@@ -106,14 +104,14 @@ namespace saf {
         vk::SurfaceKHR m_vkSurface = nullptr;
         SwapchainData m_vkSwapchainData{};
         vk::Queue m_vkQueue = nullptr;
-        vk::RenderPass m_vkRenderpass = nullptr;
+        //vk::RenderPass m_vkRenderpass = nullptr;
         vk::PipelineLayout m_vkPipelineLayout{};
         vk::Pipeline m_vkPipeline = nullptr;
         std::vector<FrameData> m_vkFramesData{};
         std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
 
-        VmaAllocator m_vmaAllocator;
-        VmaAllocation m_vmaAllocation;
+        VmaAllocator m_vmaAllocator{};
+        VmaAllocation m_vmaAllocation{};
 	};
 
 }

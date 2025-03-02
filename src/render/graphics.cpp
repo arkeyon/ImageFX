@@ -72,7 +72,7 @@ namespace saf {
         std::vector<vk::PipelineColorBlendAttachmentState> const& blend_attachment_states,
         vk::PipelineDepthStencilStateCreateInfo const& depth_stencil_state,
         vk::PipelineLayout                                        pipeline_layout,
-        vk::RenderPass                                            render_pass)
+        vk::Format                                                swapchain_format)
     {
         vk::PipelineInputAssemblyStateCreateInfo input_assembly_state({}, primitive_topology, false);
 
@@ -92,8 +92,11 @@ namespace saf {
         std::array<vk::DynamicState, 2>    dynamic_state_enables = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
         vk::PipelineDynamicStateCreateInfo dynamic_state({}, dynamic_state_enables);
 
+        vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { swapchain_format }, vk::Format::eUndefined, vk::Format::eUndefined);
+        vk::GraphicsPipelineCreateInfo();
         // Final fullscreen composition pass pipeline
-        vk::GraphicsPipelineCreateInfo pipeline_create_info({},
+        vk::GraphicsPipelineCreateInfo pipeline_create_info(
+            {},
             shader_stages,
             &vertex_input_state,
             &input_assembly_state,
@@ -105,10 +108,12 @@ namespace saf {
             &color_blend_state,
             &dynamic_state,
             pipeline_layout,
-            render_pass,
+            nullptr,
             {},
             {},
-            -1);
+            -1
+        );
+        pipeline_create_info.pNext = &pipeline_rendering_create_info;
 
         vk::Result   result;
         vk::Pipeline pipeline;
@@ -146,25 +151,22 @@ namespace saf {
         CreateDevice();
 
         VmaVulkanFunctions vulkanFunctions = {};
-        vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
-        vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+        vulkanFunctions.vkGetInstanceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr;
+        vulkanFunctions.vkGetDeviceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetDeviceProcAddr;
 
         VmaAllocatorCreateInfo vma_alloc_create_info = {};
         vma_alloc_create_info.device = m_vkDevice;
-        vma_alloc_create_info.flags = VmaAllocatorCreateFlagBits::VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+        vma_alloc_create_info.flags = {};
         vma_alloc_create_info.instance = m_vkInstance;
         vma_alloc_create_info.physicalDevice = m_vkPhysicalDevice;
-        vma_alloc_create_info.vulkanApiVersion = VK_API_VERSION_1_4;
+        vma_alloc_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
         vma_alloc_create_info.pVulkanFunctions = &vulkanFunctions;
 
-        VKCHECK(vmaCreateAllocator(&vma_alloc_create_info, &m_vmaAllocator));
+        ERR_GUARD_VULKAN(vmaCreateAllocator(&vma_alloc_create_info, &m_vmaAllocator));
 
         m_vkQueue = m_vkDevice.getQueue(m_vkGraphicsQueueIndex, 0);
 
         CreateSwapchain();
-
-        CreateRenderPass();
-        CreateFramebuffers();
 
         m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
 
@@ -188,7 +190,7 @@ namespace saf {
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
         if (m_vkPipelineLayout) m_vkDevice.destroyPipelineLayout(m_vkPipelineLayout);
-        if (m_vkRenderpass) m_vkDevice.destroyRenderPass(m_vkRenderpass);
+        //if (m_vkRenderpass) m_vkDevice.destroyRenderPass(m_vkRenderpass);
         if (m_vmaAllocator) vmaDestroyAllocator(m_vmaAllocator);
         if (m_vkDevice) m_vkDevice.destroy();
         if (m_vkSurface) m_vkInstance.destroySurfaceKHR(m_vkSurface);
@@ -298,7 +300,7 @@ namespace saf {
     void Graphics::RenderTri(uint32_t index)
     {
         // Render to this framebuffer.
-        vk::Framebuffer framebuffer = m_vkSwapchainData.framebuffers[index];
+        //vk::Framebuffer framebuffer = m_vkSwapchainData.framebuffers[index];
 
         // Allocate or re-use a primary command buffer.
         vk::CommandBuffer cmd = m_vkFramesData[index].primary_command_buffer;
@@ -306,17 +308,33 @@ namespace saf {
         // We will only submit this once before it's recycled.
         vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         // Begin command recording
+
+        vk::Image swapchain_image = m_vkDevice.getSwapchainImagesKHR(m_vkSwapchainData.swapchain)[index];
+
         cmd.begin(begin_info);
+
+        vk::ImageMemoryBarrier image_memory_barrier(
+            vk::AccessFlagBits::eNone,
+            vk::AccessFlagBits::eColorAttachmentWrite,
+            vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+            0U,
+            0U,
+            swapchain_image,
+            vk::ImageSubresourceRange{
+                vk::ImageAspectFlagBits::eColor,0U, 1U, 0U, 1U
+            });
+
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, {}, {}, { image_memory_barrier });
 
         // Set clear color values.
         vk::ClearValue clear_value;
         clear_value.color = vk::ClearColorValue(std::array<float, 4>({ {0.01f, 0.01f, 0.033f, 1.0f} }));
 
-        // Begin the render pass.
-        vk::RenderPassBeginInfo rp_begin(m_vkRenderpass, framebuffer, { {0, 0}, {m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height} },
-            clear_value);
-        // We will add draw commands in the same command buffer.
-        cmd.beginRenderPass(rp_begin, vk::SubpassContents::eInline);
+        const vk::RenderingAttachmentInfo color_attachment_info(m_vkSwapchainData.image_views[index], vk::ImageLayout::eAttachmentOptimalKHR, vk::ResolveModeFlagBits::eNone, {}, vk::ImageLayout::eUndefined, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, clear_value);
+
+        vk::RenderingInfo rendering_info({}, { {0, 0}, {m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height} }, 1, 0, { color_attachment_info }, nullptr, nullptr);
+
+        cmd.beginRenderingKHR(rendering_info);
 
         // Bind the graphics pipeline.
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkPipeline);
@@ -334,8 +352,21 @@ namespace saf {
         // Draw three vertices with one instance.
         cmd.draw(3, 1, 0, 0);
 
-        // Complete render pass.
-        cmd.endRenderPass();
+        cmd.endRenderingKHR();
+
+        vk::ImageMemoryBarrier image_memory_barrier2(
+            vk::AccessFlagBits::eColorAttachmentWrite,
+            vk::AccessFlagBits::eNone,
+            vk::ImageLayout::eColorAttachmentOptimal,
+            vk::ImageLayout::ePresentSrcKHR,
+            0U,
+            0U,
+            swapchain_image,
+            vk::ImageSubresourceRange{
+                vk::ImageAspectFlagBits::eColor,0U, 1U, 0U, 1U
+            });
+
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eBottomOfPipe, {}, {}, {}, { image_memory_barrier2 });
 
         // Complete the command buffer.
         cmd.end();
@@ -408,7 +439,7 @@ namespace saf {
             IFX_ERROR("Vulkan missing required layer(s)");
         }
 
-        const vk::ApplicationInfo applicationInfo(g_EngineName, VK_MAKE_API_VERSION(0, 1, 0, 0), g_ApplicationName, VK_MAKE_API_VERSION(0, 1, 0, 0), VK_API_VERSION_1_1);
+        const vk::ApplicationInfo applicationInfo(g_EngineName, VK_MAKE_API_VERSION(0, 1, 0, 0), g_ApplicationName, VK_MAKE_API_VERSION(0, 1, 3, 0), VK_API_VERSION_1_3);
         const vk::InstanceCreateInfo createinfo(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, &applicationInfo, m_vkLayers.size(), m_vkLayers.data(), m_vkExtensions.size(), m_vkExtensions.data());
         m_vkInstance = vk::createInstance(createinfo);
 
@@ -553,12 +584,19 @@ namespace saf {
     void Graphics::CreateDevice()
     {
         IFX_TRACE("Window CreateDevice");
-        std::array<const char*, 1> extensions = { "VK_KHR_swapchain" };
+        std::array<const char*, 3> extensions = {
+            "VK_KHR_swapchain",
+            "VK_KHR_dynamic_rendering",
+            "VK_KHR_dedicated_allocation"
+        };
 
         float queue_priority = 1.f;
         const vk::DeviceQueueCreateInfo queue_create_info({}, m_vkGraphicsQueueIndex, 1, &queue_priority);
         const vk::PhysicalDeviceFeatures device_features{};
-        const vk::DeviceCreateInfo device_create_info({}, 1, &queue_create_info, static_cast<uint32_t>(m_vkLayers.size()), m_vkLayers.data(), static_cast<uint32_t>(extensions.size()), extensions.data(), &device_features);
+        vk::PhysicalDeviceDynamicRenderingFeatures device_dynamic_features {};
+        device_dynamic_features.dynamicRendering = VK_TRUE;
+        const vk::DeviceCreateInfo device_create_info({}, 1, &queue_create_info, static_cast<uint32_t>(m_vkLayers.size()), m_vkLayers.data(), static_cast<uint32_t>(extensions.size()), extensions.data(), &device_features, &device_dynamic_features);
+        
         m_vkDevice = m_vkPhysicalDevice.createDevice(device_create_info);
 
         if (!m_vkDevice)
@@ -640,7 +678,8 @@ namespace saf {
         vk::SwapchainKHR old_swapchain = m_vkSwapchainData.swapchain;
 
         // FIFO must be supported by all implementations.
-        vk::PresentModeKHR swapchain_present_mode = vk::PresentModeKHR::eFifo;
+        vk::PresentModeKHR swapchain_present_mode = vk::PresentModeKHR::eMailbox;
+        //vk::PresentModeKHR swapchain_present_mode = vk::PresentModeKHR::eFifo;
 
         vk::SwapchainCreateInfoKHR swapchain_create_info;
         swapchain_create_info.surface = m_vkSurface;
@@ -696,51 +735,6 @@ namespace saf {
         }
     }
 
-    void Graphics::CreateRenderPass()
-    {
-        IFX_TRACE("Window CreateRenderPass");
-        vk::AttachmentDescription attachment({},
-            m_vkSwapchainData.format,
-            vk::SampleCountFlagBits::e1,
-            vk::AttachmentLoadOp::eClear,
-            vk::AttachmentStoreOp::eStore,
-            vk::AttachmentLoadOp::eDontCare,
-            vk::AttachmentStoreOp::eDontCare,
-            vk::ImageLayout::eUndefined,
-            vk::ImageLayout::ePresentSrcKHR);
-
-        vk::AttachmentReference color_ref(0, vk::ImageLayout::eColorAttachmentOptimal);
-
-        // We will end up with two transitions.
-        // The first one happens right before we start subpass #0, where
-        // eUndefined is transitioned into eColorAttachmentOptimal.
-        // The final layout in the render pass attachment states ePresentSrcKHR, so we
-        // will get a final transition from eColorAttachmentOptimal to ePresetSrcKHR.
-        vk::SubpassDescription subpass({}, vk::PipelineBindPoint::eGraphics, {}, color_ref);
-
-        // Create a dependency to external events.
-        // We need to wait for the WSI semaphore to signal.
-        // Only pipeline stages which depend on eColorAttachmentOutput will
-        // actually wait for the semaphore, so we must also wait for that pipeline stage.
-        vk::SubpassDependency dependency(/*srcSubpass   */ VK_SUBPASS_EXTERNAL,
-            /*dstSubpass   */ 0,
-            /*srcStageMask */ vk::PipelineStageFlagBits::eColorAttachmentOutput,
-            /*dstStageMask */ vk::PipelineStageFlagBits::eColorAttachmentOutput,
-            // Since we changed the image layout, we need to make the memory visible to
-            // color attachment to modify.
-            /*srcAccessMask*/{},
-            /*dstAccessMask*/ vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite);
-
-        // Finally, create the renderpass.
-        vk::RenderPassCreateInfo rp_info({}, attachment, subpass, dependency);
-        m_vkRenderpass = m_vkDevice.createRenderPass(rp_info);
-
-
-
-        if (!m_vkRenderpass) IFX_ERROR("Vulkan failed to create renderpass");
-
-    }
-
     void Graphics::CreatePipeline()
     {
         IFX_TRACE("Window CreatePipeline");
@@ -775,42 +769,14 @@ namespace saf {
             vk::FrontFace::eClockwise,
             { blend_attachment },
             depth_stencil,
-            m_vkPipelineLayout,        // We need to specify the pipeline layout
-            m_vkRenderpass);           // and the render pass up front as well
+            m_vkPipelineLayout,
+            m_vkSwapchainData.format);        // We need to specify the pipeline layout
 
         if (!m_vkPipeline) IFX_ERROR("Vulkan failed to create graphics pipeline");
         // Pipeline is baked, we can delete the shader modules now.
         m_vkDevice.destroyShaderModule(shader_stages[0].module);
         m_vkDevice.destroyShaderModule(shader_stages[1].module);
 
-    }
-
-    void Graphics::CreateFramebuffers()
-    {
-        IFX_TRACE("Window CreateFramebuffers");
-        if (!m_vkSwapchainData.framebuffers.empty())
-        {
-            for (vk::Framebuffer framebuffer : m_vkSwapchainData.framebuffers) { m_vkDevice.destroyFramebuffer(framebuffer); }
-        }
-        m_vkSwapchainData.framebuffers.clear();
-
-        for (auto image_view : m_vkSwapchainData.image_views)
-        {
-            vk::FramebufferCreateInfo framebuffer_create_info({}, m_vkRenderpass, { image_view }, m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height, 1);
-            m_vkSwapchainData.framebuffers.push_back(m_vkDevice.createFramebuffer(framebuffer_create_info));
-        }
-    }
-
-    uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
-        vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
-
-        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-                return i;
-            }
-        }
-
-        throw std::runtime_error("failed to find suitable memory type!");
     }
 
     void Graphics::CreateVertexBuffer()
@@ -834,19 +800,19 @@ namespace saf {
         //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
         */
 
-        VkBufferCreateInfo bufferInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = sizeof(Vertex) * m_VertexBuffer.size();
         bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        VKCHECK(vmaCreateBuffer(m_vmaAllocator, &bufferInfo, &allocInfo, reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer), &m_vmaAllocation, nullptr));
+        VkResult res = vmaCreateBuffer(m_vmaAllocator, &bufferInfo, &allocInfo, reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer), &m_vmaAllocation, nullptr);
 
-        VKCHECK(vmaMapMemory(m_vmaAllocator, m_vmaAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
-
-
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)
@@ -889,8 +855,8 @@ namespace saf {
         }
         m_vkFramesData.clear();
 
-        for (vk::Framebuffer framebuffer : m_vkSwapchainData.framebuffers) { m_vkDevice.destroyFramebuffer(framebuffer); }
-        m_vkSwapchainData.framebuffers.clear();
+        //for (vk::Framebuffer framebuffer : m_vkSwapchainData.framebuffers) { m_vkDevice.destroyFramebuffer(framebuffer); }
+        //m_vkSwapchainData.framebuffers.clear();
 
         m_vkDevice.destroySwapchainKHR(swapchain);
     }

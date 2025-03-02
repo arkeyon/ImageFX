@@ -2,13 +2,12 @@
 #include <cstddef>
 #define SAF_ASSERT assert
 
-#ifdef _MSC_VER
-#define VKCHECK(x) (SAF_ASSERT(x == VK_SUCCESS, #x))
-#endif
+#include <exception>
 
-#ifdef __clang__
-#define VKCHECK(x) (SAF_ASSERT(x == VK_SUCCESS))
-#endif
+#define ERR_GUARD_VULKAN(expr)  do { if((expr) < 0) { \
+        assert(0 && #expr); \
+        throw std::runtime_error(__FILE__ ": VkResult( " #expr " ) < 0"); \
+    } } while(false)
 
 
 namespace saf {
