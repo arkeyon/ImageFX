@@ -191,54 +191,6 @@ namespace saf {
             return device.createShaderModule(shader_module_create_info);
         }
 
-                [[nodiscard]] vk::ShaderModule CreateShaderModule(vk::Device device, std::string path)
-        {
-            static const std::map<std::string, shaderc_shader_kind> shader_stage_map = { {"comp", shaderc_shader_kind::shaderc_compute_shader},
-                                                                                            {"frag", shaderc_shader_kind::shaderc_fragment_shader},
-                                                                                            {"geom", shaderc_shader_kind::shaderc_geometry_shader},
-                                                                                            {"tesc", shaderc_shader_kind::shaderc_tess_control_shader},
-                                                                                            {"tese", shaderc_shader_kind::shaderc_tess_evaluation_shader},
-                                                                                            {"vert", shaderc_shader_kind::shaderc_vertex_shader} };
-            auto compiler = shaderc_compiler_initialize();
-
-            std::ifstream file;
-            file.open(path);
-            if (!file) IFX_ERROR("Failed to load file: {0}", path);
-
-            std::string str;
-            std::string file_contents;
-            while (std::getline(file, str))
-            {
-                file_contents += str;
-                file_contents.push_back('\n');
-            }
-
-            IFX_TRACE("Shader src:\n{0}", file_contents);
-
-            std::string file_ext = path;
-
-            // Extract extension name from the glsl shader file
-            file_ext = file_ext.substr(file_ext.find_last_of(".") + 1);
-
-            // Compile the GLSL source
-            auto stageIt = shader_stage_map.find(file_ext);
-            if (stageIt == shader_stage_map.end())
-            {
-                IFX_ERROR("Vulkan file extension {0} does not have a vulkan shader stage.", file_ext);
-            }
-            shaderc_compilation_result_t compilation_result = shaderc_compile_into_spv(compiler, file_contents.c_str(), file_contents.size(), stageIt->second, path.c_str(), "main", nullptr);
-            if (shaderc_result_get_compilation_status(compilation_result) != shaderc_compilation_status_success) IFX_ERROR("ShaderC failed to compile: {0}", path);
-
-            size_t length = shaderc_result_get_length(compilation_result);
-            const uint32_t* spirv = (const uint32_t*)shaderc_result_get_bytes(compilation_result);
-
-            vk::ShaderModuleCreateInfo shader_module_create_info({}, length, spirv);
-
-            shaderc_compiler_release(compiler);
-
-            return device.createShaderModule(shader_module_create_info);
-        }
-
         [[nodiscard]] vk::Instance CreateInstance(const std::vector<const char*>& extensions, const std::vector<const char*>& layers)
         {
             IFX_TRACE("Window CreateInstance");
@@ -414,6 +366,12 @@ namespace saf {
 
             return device;
         }
+
+        void immediate_submit(std::function<void(vk::CommandBuffer cmd)>)
+        {
+
+        }
+
 	}
 
 }

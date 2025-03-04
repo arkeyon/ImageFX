@@ -1,5 +1,5 @@
 
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.25...3.28)
 project(ImageFX VERSION 1.0
 DESCRIPTION "Image Effects Project"
 LANGUAGES CXX)
@@ -14,9 +14,37 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package( Vulkan REQUIRED COMPONENTS shaderc_combined)
+
 add_subdirectory(dependencies/spdlog)
 add_subdirectory(dependencies/glfw)
 add_subdirectory(dependencies/VulkanMemoryAllocator)
+
+set(IMGUI_PATH ${CMAKE_CURRENT_LIST_DIR}/dependencies/imgui)
+add_library(imgui
+	${IMGUI_PATH}/imgui.h
+	${IMGUI_PATH}/imgui.cpp
+	${IMGUI_PATH}/imconfig.h
+	${IMGUI_PATH}/imgui_demo.cpp
+	${IMGUI_PATH}/imgui_draw.cpp
+	${IMGUI_PATH}/imgui_internal.h
+	${IMGUI_PATH}/imstb_rectpack.h
+	${IMGUI_PATH}/imstb_textedit.h
+	${IMGUI_PATH}/imstb_truetype.h
+	${IMGUI_PATH}/imgui_tables.cpp
+	${IMGUI_PATH}/imgui_widgets.cpp
+
+	${IMGUI_PATH}/backends/imgui_impl_vulkan.cpp
+	${IMGUI_PATH}/backends/imgui_impl_vulkan.h
+	${IMGUI_PATH}/backends/imgui_impl_glfw.cpp
+	${IMGUI_PATH}/backends/imgui_impl_glfw.h
+)
+
+target_include_directories(imgui PUBLIC ${IMGUI_PATH})
+target_include_directories(imgui PUBLIC dependencies/glfw/include)
+
+target_link_libraries(imgui PRIVATE Vulkan::Vulkan)
+target_link_libraries(imgui PRIVATE glfw)
 
 add_executable(${PROJECT_NAME}
 	src/main.cpp
@@ -33,58 +61,29 @@ add_executable(${PROJECT_NAME}
 	src/utils/vmaimpl.cpp
 )
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
-#target_compile_options(ImageFX PUBLIC "-Wall")
-
-if (MSVC)
-	target_compile_options(${PROJECT_NAME} PUBLIC "/utf-8")
-	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
-else()
-	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR})
-endif()
-
-target_compile_options(${PROJECT_NAME} PUBLIC "-Wall")
-
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
-
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_include_directories(${PROJECT_NAME} PUBLIC dependencies/spdlog/include)
 target_include_directories(${PROJECT_NAME} PUBLIC dependencies/glfw/include)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies/stb)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies/VulkanMemoryAllocator/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${IMGUI_PATH})
 
-# find Vulkan SDK
-find_package( Vulkan REQUIRED COMPONENTS shaderc_combined)
+target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
 
-message( STATUS "Vulkan_LIBRARY: ${Vulkan_LIBRARY}" )
-message( STATUS "Vulkan_INCLUDE_DIRS: ${Vulkan_INCLUDE_DIRS}" )
-message( STATUS "Vulkan_VERSION: ${Vulkan_VERSION}" )
-message( STATUS "Vulkan_shaderc_combined_FOUND: ${Vulkan_shaderc_combined_FOUND}" )
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+target_compile_options(ImageFX PUBLIC "-Wall")
+target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 
-# Require Vulkan version ≥ 1.3.256 (earliest version when the Vulkan module was available)
-if( ${Vulkan_VERSION} VERSION_LESS "1.3.256" OR NOT MSVC)
-	message( WARNING "VulkanHppModule unsupported directly linking to vulkan")
-	target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan)
-
-	target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
+if (MSVC)
+	target_compile_options(${PROJECT_NAME} PUBLIC "-Wall;/utf-8")
+	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
 else()
-
-	add_library( VulkanHppModule )
-	# set up Vulkan C++ module as a library
-	target_sources( VulkanHppModule PRIVATE
-  		FILE_SET CXX_MODULES
-		BASE_DIRS ${Vulkan_INCLUDE_DIR}
-		FILES ${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm
-	)
-	target_compile_features( VulkanHppModule PUBLIC cxx_std_20 )
-	target_link_libraries( VulkanHppModule PUBLIC Vulkan::Vulkan )
-	target_compile_definitions( VulkanHppModule PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 )
-
-	target_link_libraries(${PROJECT_NAME} PUBLIC VulkanHppModule )
-
+	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR})
 endif()
 
+target_link_libraries(${PROJECT_NAME} PRIVATE imgui)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
 target_link_libraries(${PROJECT_NAME} PRIVATE VulkanMemoryAllocator)
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::shaderc_combined)
+target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan)
