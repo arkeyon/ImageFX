@@ -87,6 +87,24 @@ namespace saf {
             });
     }
 
+
+    void printFPS() {
+        static auto oldTime = std::chrono::high_resolution_clock::now();
+        static int fps; fps++;
+
+        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
+            oldTime = std::chrono::high_resolution_clock::now();
+
+            fps = 0;
+        }
+
+        ImGui::Begin("ImGui");
+
+        ImGui::Text("%d", fps);
+
+        ImGui::End();
+    }
+
     void Window::Update()
     {
         glfwPollEvents();
@@ -94,7 +112,9 @@ namespace saf {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGui::ShowDemoWindow(); // Show demo window! :)
+
+        printFPS();
+        //ImGui::ShowDemoWindow(); // Show demo window! :)
 
         m_Graphics->Render();
     }

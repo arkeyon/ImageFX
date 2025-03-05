@@ -111,8 +111,7 @@ namespace saf {
         pool_info.poolSizeCount = std::size(pool_sizes);
         pool_info.pPoolSizes = pool_sizes;
     
-        VkDescriptorPool imguiPool;
-        ERR_GUARD_VULKAN(vkCreateDescriptorPool(m_vkDevice, &pool_info, nullptr, &imguiPool));
+        m_vkDescriptorPool = m_vkDevice.createDescriptorPool(pool_info);
 
         ImGui_ImplVulkan_InitInfo imgui_vulkan_impl_info {};
         imgui_vulkan_impl_info.ApiVersion = VK_API_VERSION_1_3;
@@ -124,7 +123,7 @@ namespace saf {
         imgui_vulkan_impl_info.MinImageCount = 3;
         imgui_vulkan_impl_info.ImageCount = 3;
         imgui_vulkan_impl_info.UseDynamicRendering = true;
-        imgui_vulkan_impl_info.DescriptorPool = imguiPool;
+        imgui_vulkan_impl_info.DescriptorPool = m_vkDescriptorPool;
         imgui_vulkan_impl_info.PipelineRenderingCreateInfo = static_cast<VkPipelineRenderingCreateInfoKHR>(pipeline_rendering_create_info);
         imgui_vulkan_impl_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         //imgui_vulkan_impl_info.Allocation = m_vkAll
@@ -142,6 +141,7 @@ namespace saf {
 
         ImGui_ImplVulkan_Shutdown();
 
+        if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
         if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaAllocation);
         if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaAllocation);
         /*if (m_vkVertexBufferMemory)
@@ -161,21 +161,8 @@ namespace saf {
         if (m_vkInstance) m_vkInstance.destroy();
 	}
 
-    void printFPS() {
-        static auto oldTime = std::chrono::high_resolution_clock::now();
-        static int fps; fps++;
-
-        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
-            oldTime = std::chrono::high_resolution_clock::now();
-            IFX_TRACE("FPS: {0}", fps);
-            fps = 0;
-        }
-    }
-
     void Graphics::Render()
     {
-
-        printFPS();
 
         static float angle = 0.f;
         angle += 0.001f;
