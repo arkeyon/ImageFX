@@ -88,19 +88,23 @@ namespace saf {
     }
 
 
+
     void printFPS() {
         static auto oldTime = std::chrono::high_resolution_clock::now();
         static int fps; fps++;
 
+
+        static int second_fps = 0;
+
         if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
             oldTime = std::chrono::high_resolution_clock::now();
 
+            second_fps = fps;
             fps = 0;
         }
 
-        ImGui::Begin("ImGui");
-
-        ImGui::Text("%d", fps);
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %d", second_fps);
 
         ImGui::End();
     }
@@ -114,7 +118,6 @@ namespace saf {
         ImGui::NewFrame();
 
         printFPS();
-        //ImGui::ShowDemoWindow(); // Show demo window! :)
 
         m_Graphics->Render();
     }
