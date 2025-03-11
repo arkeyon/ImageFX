@@ -12,6 +12,9 @@
 
 #include "platform/vulkangraphics.h"
 
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+
 namespace saf {
 
     Graphics::Graphics()
@@ -22,7 +25,7 @@ namespace saf {
 
     Graphics::~Graphics()
     {
-        Destroy();
+
     }
 
 	void Graphics::Init(GLFWwindow* glfw_window, uint32_t width, uint32_t height)
@@ -83,18 +86,69 @@ namespace saf {
         CreatePipeline();
 
         CreateVertexBuffer();
-        CreateIndexBuffer();
+
+        vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { m_vkSwapchainData.format }, vk::Format::eUndefined, vk::Format::eUndefined);
+
+        VkDescriptorPoolSize pool_sizes[] =
+        {
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
+        };
+    
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000;
+        pool_info.poolSizeCount = std::size(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+    
+        m_vkDescriptorPool = m_vkDevice.createDescriptorPool(pool_info);
+
+        ImGui_ImplVulkan_InitInfo imgui_vulkan_impl_info {};
+        imgui_vulkan_impl_info.ApiVersion = VK_API_VERSION_1_3;
+        imgui_vulkan_impl_info.Instance = m_vkInstance;
+        imgui_vulkan_impl_info.PhysicalDevice = m_vkPhysicalDevice;
+        imgui_vulkan_impl_info.Device = m_vkDevice;
+        imgui_vulkan_impl_info.QueueFamily = m_vkGraphicsQueueIndex;
+        imgui_vulkan_impl_info.Queue = m_vkQueue;
+        imgui_vulkan_impl_info.MinImageCount = 3;
+        imgui_vulkan_impl_info.ImageCount = 3;
+        imgui_vulkan_impl_info.UseDynamicRendering = true;
+        imgui_vulkan_impl_info.DescriptorPool = m_vkDescriptorPool;
+        imgui_vulkan_impl_info.PipelineRenderingCreateInfo = static_cast<VkPipelineRenderingCreateInfoKHR>(pipeline_rendering_create_info);
+        imgui_vulkan_impl_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        //imgui_vulkan_impl_info.Allocation = m_vkAll
+
+        ImGui_ImplVulkan_Init(&imgui_vulkan_impl_info);
+
+        ImGui_ImplVulkan_CreateFontsTexture();
 	}
 
 	void Graphics::Destroy()
 	{
+        IFX_INFO("Vulkan Shutdown");
+
         if (m_vkDevice) m_vkDevice.waitIdle();
 
-        if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation);
-        vmaUnmapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation);
-        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaVertexBufferAllocation);
-        if (m_vkIndexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkIndexBuffer, m_vmaIndexBufferAllocation);
+        ImGui_ImplVulkan_Shutdown();
 
+        if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
+        if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaAllocation);
+        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaAllocation);
+        /*if (m_vkVertexBufferMemory)
+        {
+            m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
+            m_vkDevice.freeMemory(m_vkVertexBufferMemory);
+        }*/
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
@@ -106,21 +160,8 @@ namespace saf {
         if (m_vkInstance) m_vkInstance.destroy();
 	}
 
-    void printFPS() {
-        static auto oldTime = std::chrono::high_resolution_clock::now();
-        static int fps; fps++;
-
-        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
-            oldTime = std::chrono::high_resolution_clock::now();
-            IFX_TRACE("FPS: {0}", fps);
-            fps = 0;
-        }
-    }
-
     void Graphics::Render()
     {
-
-        printFPS();
 
         static float angle = 0.f;
         angle += 0.001f;
@@ -141,7 +182,6 @@ namespace saf {
         vk::Semaphore acquire_semaphore;
         if (m_vkRecycleSemaphores.empty())
         {
-
             acquire_semaphore = m_vkDevice.createSemaphore({});
         }
         else
@@ -234,7 +274,7 @@ namespace saf {
             });
 
         cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, {}, {}, { image_memory_barrier });
-
+        
         // Set clear color values.
         vk::ClearValue clear_value;
         clear_value.color = vk::ClearColorValue(std::array<float, 4>({ {0.01f, 0.01f, 0.033f, 1.0f} }));
@@ -261,6 +301,9 @@ namespace saf {
 
         // Draw three vertices with one instance.
         cmd.drawIndexed(3, 1, 0, 0, 0);
+
+        ImGui::Render();
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
         cmd.endRenderingKHR();
 
@@ -530,42 +573,14 @@ namespace saf {
         allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        ERR_GUARD_VULKAN(vmaCreateBuffer(
+        VkResult res = vmaCreateBuffer(
             m_vmaAllocator,
             &bufferInfo,
             &allocInfo,
             reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer),
-            &m_vmaVertexBufferAllocation,
+            &m_vmaAllocation,
             nullptr
-        ));
-
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
-    }
-
-    void Graphics::CreateIndexBuffer()
-    {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = sizeof(uint32_t) * m_IndexBuffer.size();
-        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-        allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-
-        ERR_GUARD_VULKAN(vmaCreateBuffer(
-            m_vmaAllocator,
-            &bufferInfo,
-            &allocInfo,
-            reinterpret_cast<VkBuffer*>(&m_vkIndexBuffer),
-            &m_vmaIndexBufferAllocation,
-            nullptr
-        ));
-
-        uint32_t* indices;
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation, reinterpret_cast<void**>(&indices)));
-        memcpy(static_cast<void*>(indices), static_cast<void*>(m_IndexBuffer.data()), m_IndexBuffer.size() * sizeof(uint32_t));
+        );
 
     }
 

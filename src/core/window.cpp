@@ -4,6 +4,9 @@
 #include "utils/log.h"
 
 #include <stddef.h>
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_vulkan.h>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
@@ -18,6 +21,12 @@ namespace saf {
 
     Window::~Window()
     {
+        IFX_INFO("Window Shutdown");
+
+        m_Graphics->Destroy();
+
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
 
         if (m_glfwWindow) glfwDestroyWindow(m_glfwWindow);
         glfwTerminate();
@@ -26,6 +35,16 @@ namespace saf {
     void Window::Init()
     {
         InitGLFW();
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+        ImGui_ImplGlfw_InitForVulkan(m_glfwWindow, true);
+
         m_Graphics->Init(m_glfwWindow, m_Width, m_Height);
     }
 
@@ -68,11 +87,39 @@ namespace saf {
             });
     }
 
+
+
+    void printFPS() {
+        static auto oldTime = std::chrono::high_resolution_clock::now();
+        static int fps; fps++;
+
+
+        static int second_fps = 0;
+
+        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
+            oldTime = std::chrono::high_resolution_clock::now();
+
+            second_fps = fps;
+            fps = 0;
+        }
+
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %d", second_fps);
+
+        ImGui::End();
+    }
+
     void Window::Update()
     {
-        m_Graphics->Render();
-
         glfwPollEvents();
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        printFPS();
+
+        m_Graphics->Render();
     }
 
 }
