@@ -367,9 +367,23 @@ namespace saf {
             return device;
         }
 
-        void immediate_submit(std::function<void(vk::CommandBuffer cmd)>)
+        vk::Fence immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
         {
+            vk::FenceCreateInfo fence_create_info({vk::FenceCreateFlagBits::eSignaled});
+            vk::Fence fence = device.createFence(fence_create_info);
 
+            vk::CommandPoolCreateInfo commandpool_create_info = vk::CommandPoolCreateInfo({ vk::CommandPoolCreateFlagBits::eTransient, queue_index });
+            vk::CommandPool command_pool = device.createCommandPool(commandpool_create_info);
+
+            vk::CommandBufferAllocateInfo command_buffer_allocate_info(command_pool, vk::CommandBufferLevel::ePrimary, 1);
+            vk::CommandBuffer cmd = device.allocateCommandBuffers(command_buffer_allocate_info).front();
+
+            func(cmd);
+
+            vk::SubmitInfo info(0U, nullptr, nullptr, 1, &cmd, 0, nullptr);
+
+            device.getQueue(queue_index, 0).submit(info, fence);
+            return fence;
         }
 
 	}
