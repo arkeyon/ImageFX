@@ -70,6 +70,7 @@ namespace saf {
         void CreateSwapchain();
         void CreatePipeline();
         void CreateVertexBuffer();
+        void CreateIndexBuffer();
         void RenderTri(uint32_t index);
 
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);
@@ -83,8 +84,10 @@ namespace saf {
             Vertex{glm::vec2(-0.5f, 0.5f), glm::vec3(0.7, 0.7, 0.7)},
         };
 
+        std::array<uint32_t, 3> m_IndexBuffer = {0, 1, 2};
+
         vk::Buffer m_vkVertexBuffer = nullptr;
-        vk::DeviceMemory m_vkVertexBufferMemory = nullptr;
+        vk::Buffer m_vkIndexBuffer = nullptr;
 
         Vertex* m_VertexArrayTransformed = nullptr;
 
@@ -105,7 +108,8 @@ namespace saf {
         std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
 
         VmaAllocator m_vmaAllocator{};
-        VmaAllocation m_vmaAllocation{};
+        VmaAllocation m_vmaVertexBufferAllocation{};
+        VmaAllocation m_vmaIndexBufferAllocation{};
 	};
 
 }
