@@ -144,11 +144,8 @@ namespace saf {
         if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
         if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaAllocation);
         if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaAllocation);
-        /*if (m_vkVertexBufferMemory)
-        {
-            m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
-            m_vkDevice.freeMemory(m_vkVertexBufferMemory);
-        }*/
+        if (m_vkIndexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkIndexBuffer, m_vmaIndexBufferAllocation);
+
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
