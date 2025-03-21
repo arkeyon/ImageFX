@@ -86,12 +86,10 @@ namespace saf {
             Vertex{glm::vec2(-0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
             Vertex{glm::vec2(+0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
             Vertex{glm::vec2(+0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
-            Vertex{glm::vec2(-0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
-            Vertex{glm::vec2(+0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
             Vertex{glm::vec2(-0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)}
         };
 
-        std::array<uint32_t, 3> m_IndexBuffer = {0, 1, 2};
+        std::array<uint32_t, 6> m_IndexBuffer = {0, 1, 2, 0, 2, 3};
 
         vk::Buffer m_vkVertexBuffer = nullptr;
         vk::Buffer m_vkIndexBuffer = nullptr;

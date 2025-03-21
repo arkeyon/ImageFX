@@ -86,6 +86,7 @@ namespace saf {
         CreatePipeline();
 
         CreateVertexBuffer();
+        CreateIndexBuffer();
 
         vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { m_vkSwapchainData.format }, vk::Format::eUndefined, vk::Format::eUndefined);
 
@@ -142,8 +143,9 @@ namespace saf {
         ImGui_ImplVulkan_Shutdown();
 
         if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
-        if (m_VertexArrayTransformed) vmaUnmapMemory(m_vmaAllocator, m_vmaAllocation);
-        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaAllocation);
+        vmaUnmapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation);
+        vmaUnmapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation);
+        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaVertexBufferAllocation);
         if (m_vkIndexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkIndexBuffer, m_vmaIndexBufferAllocation);
 
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
@@ -163,8 +165,6 @@ namespace saf {
         static float angle = 0.f;
         angle += 0.001f;
 
-        //Vertex* vertices = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, m_VertexBuffer.size() * sizeof(Vertex)));
-
         for (int i = 0; i < m_VertexBuffer.size(); i++)
         {
             auto& pos = m_VertexBuffer[i].pos;
@@ -173,8 +173,6 @@ namespace saf {
 
             m_VertexArrayTransformed[i].color = color;
         }
-
-        //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
 
         vk::Semaphore acquire_semaphore;
         if (m_vkRecycleSemaphores.empty())
@@ -297,7 +295,7 @@ namespace saf {
         cmd.bindIndexBuffer(m_vkIndexBuffer, 0, vk::IndexType::eUint32);
 
         // Draw three vertices with one instance.
-        cmd.drawIndexed(3, 1, 0, 0, 0);
+        cmd.drawIndexed(6, 1, 0, 0, 0);
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -541,25 +539,6 @@ namespace saf {
 
     void Graphics::CreateVertexBuffer()
     {
-        /*
-        auto vertex_buffer_create_info = vk::BufferCreateInfo({}, sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, 1);
-        m_vkVertexBuffer = m_vkDevice.createBuffer(vertex_buffer_create_info);
-        if (!m_vkVertexBuffer) IFX_ERROR("Vulkan failed to create vertex buffer");
-
-        vk::MemoryRequirements memory_requirements = m_vkDevice.getBufferMemoryRequirements(m_vkVertexBuffer);
-
-        uint32_t memory_type_index = findMemoryType(m_vkPhysicalDevice, memory_requirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostVisible);
-        vk::MemoryAllocateInfo memory_allocate_info(memory_requirements.size, memory_type_index);
-
-        m_vkVertexBufferMemory = m_vkDevice.allocateMemory(memory_allocate_info);
-
-        m_vkDevice.bindBufferMemory(m_vkVertexBuffer, m_vkVertexBufferMemory, 0);
-
-        m_VertexArrayTransformed = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, vertex_buffer_create_info.size));
-        //memcpy(pdata, m_VertexBuffer.data(), vertex_buffer_create_info.size);
-        //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);
-        */
-
         VkBufferCreateInfo bufferInfo = {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = sizeof(Vertex) * m_VertexBuffer.size();
@@ -570,15 +549,43 @@ namespace saf {
         allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 
-        VkResult res = vmaCreateBuffer(
+        ERR_GUARD_VULKAN(vmaCreateBuffer(
             m_vmaAllocator,
             &bufferInfo,
             &allocInfo,
             reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer),
-            &m_vmaAllocation,
+            &m_vmaVertexBufferAllocation,
             nullptr
-        );
+        ));
 
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
+    }
+
+    void Graphics::CreateIndexBuffer()
+    {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(uint32_t) * m_IndexBuffer.size();
+        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        ERR_GUARD_VULKAN(vmaCreateBuffer(
+            m_vmaAllocator,
+            &bufferInfo,
+            &allocInfo,
+            reinterpret_cast<VkBuffer*>(&m_vkIndexBuffer),
+            &m_vmaIndexBufferAllocation,
+            nullptr
+        ));
+
+        uint32_t* indices;
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation, reinterpret_cast<void**>(&indices)));
+
+        memcpy(indices, m_IndexBuffer.data(), sizeof(uint32_t) * m_IndexBuffer.size());
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)
