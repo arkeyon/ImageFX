@@ -1,8 +1,10 @@
+#include "glm/glm/fwd.hpp"
 #include "safpch.h"
 #include "window.h"
 
 #include "utils/log.h"
 
+#include <cstdint>
 #include <stddef.h>
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
@@ -87,9 +89,7 @@ namespace saf {
             });
     }
 
-
-
-    void printFPS() {
+    int printFPS() {
         static auto oldTime = std::chrono::high_resolution_clock::now();
         static int fps; fps++;
 
@@ -103,10 +103,7 @@ namespace saf {
             fps = 0;
         }
 
-        ImGui::Begin("Debug");
-        ImGui::Text("FPS: %d", second_fps);
-
-        ImGui::End();
+        return second_fps;
     }
 
     void Window::Update()
@@ -117,7 +114,15 @@ namespace saf {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        printFPS();
+        static int fps = 0;
+        fps = printFPS();
+
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %d", fps);
+
+        ImGui::SliderFloat3("Color Slider", &m_Graphics->color.x, 0.f, 1.f);
+
+        ImGui::End();
 
         m_Graphics->Render();
     }

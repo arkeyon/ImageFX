@@ -68,6 +68,8 @@ namespace saf {
         void Destroy();
 
         void Render();
+
+        glm::vec3 color = glm::vec3(0.5f, 0.5f, 0.f);
 	private:
         void CreateSwapchain();
         void CreatePipeline();
@@ -80,10 +82,13 @@ namespace saf {
         uint32_t m_Width{};
         uint32_t m_Height{};
 
-        std::array<Vertex, 3> m_VertexBuffer = {
-            Vertex{glm::vec2(0.0f, -0.5f), glm::vec3(0.2, 0.2, 0.2)},
-            Vertex{glm::vec2(0.7f, 0.5f), glm::vec3(1.0, 1.0, 1.0)},
-            Vertex{glm::vec2(-0.5f, 0.5f), glm::vec3(0.7, 0.7, 0.7)},
+        std::array<Vertex, 6> m_VertexBuffer = {
+            Vertex{glm::vec2(-0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
+            Vertex{glm::vec2(+0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
+            Vertex{glm::vec2(+0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
+            Vertex{glm::vec2(-0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
+            Vertex{glm::vec2(+0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
+            Vertex{glm::vec2(-0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)}
         };
 
         std::array<uint32_t, 3> m_IndexBuffer = {0, 1, 2};

@@ -165,13 +165,13 @@ namespace saf {
 
         //Vertex* vertices = static_cast<Vertex*>(m_vkDevice.mapMemory(m_vkVertexBufferMemory, 0, m_VertexBuffer.size() * sizeof(Vertex)));
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < m_VertexBuffer.size(); i++)
         {
             auto& pos = m_VertexBuffer[i].pos;
             m_VertexArrayTransformed[i].pos.x = pos.x * cosf(angle) - pos.y * sinf(angle);
             m_VertexArrayTransformed[i].pos.y = pos.x * sinf(angle) + pos.y * cosf(angle);
 
-            m_VertexArrayTransformed[i].color = m_VertexBuffer[i].color;
+            m_VertexArrayTransformed[i].color = color;
         }
 
         //m_vkDevice.unmapMemory(m_vkVertexBufferMemory);

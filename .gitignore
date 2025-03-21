@@ -2,3 +2,4 @@ build/
 .cache/
 .vs/
 vc140.pdb
+imgui.ini

@@ -369,7 +369,7 @@ namespace saf {
 
         vk::Fence immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
         {
-            vk::FenceCreateInfo fence_create_info({vk::FenceCreateFlagBits::eSignaled});
+            vk::FenceCreateInfo fence_create_info(vk::FenceCreateFlagBits::eSignaled);
             vk::Fence fence = device.createFence(fence_create_info);
 
             vk::CommandPoolCreateInfo commandpool_create_info = vk::CommandPoolCreateInfo({ vk::CommandPoolCreateFlagBits::eTransient, queue_index });
