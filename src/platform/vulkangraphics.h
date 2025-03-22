@@ -367,10 +367,11 @@ namespace saf {
             return device;
         }
 
-        vk::Fence immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
+        void immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
         {
             vk::FenceCreateInfo fence_create_info(vk::FenceCreateFlagBits::eSignaled);
             vk::Fence fence = device.createFence(fence_create_info);
+            device.resetFences(fence);
 
             vk::CommandPoolCreateInfo commandpool_create_info = vk::CommandPoolCreateInfo({ vk::CommandPoolCreateFlagBits::eTransient, queue_index });
             vk::CommandPool command_pool = device.createCommandPool(commandpool_create_info);
@@ -378,12 +379,48 @@ namespace saf {
             vk::CommandBufferAllocateInfo command_buffer_allocate_info(command_pool, vk::CommandBufferLevel::ePrimary, 1);
             vk::CommandBuffer cmd = device.allocateCommandBuffers(command_buffer_allocate_info).front();
 
+            vk::CommandBufferBeginInfo command_buffer_begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+
+            cmd.begin(command_buffer_begin_info);
+
             func(cmd);
+
+            cmd.end();
 
             vk::SubmitInfo info(0U, nullptr, nullptr, 1, &cmd, 0, nullptr);
 
             device.getQueue(queue_index, 0).submit(info, fence);
-            return fence;
+            
+            (void)device.waitForFences(fence, true, UINT64_MAX);
+
+            device.destroyFence(fence);
+            device.destroyCommandPool(command_pool);
+        }
+
+        vk::Buffer create_buffer(uint32_t size, vk::BufferUsageFlags buffer_usage, vk::SharingMode sharing_mode, VmaMemoryUsage memory_usage, VmaAllocationCreateFlags memory_flags, VmaAllocator allocator, VmaAllocation& allocation)
+        {
+            VkBufferCreateInfo bufferInfo = {};
+            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufferInfo.size = size;
+            bufferInfo.usage = static_cast<VkBufferUsageFlags>(buffer_usage);
+            bufferInfo.sharingMode = static_cast<VkSharingMode>(sharing_mode);
+
+            VmaAllocationCreateInfo allocInfo = {};
+            allocInfo.usage = memory_usage;
+            allocInfo.flags = memory_flags;
+
+            vk::Buffer buffer;
+
+            ERR_GUARD_VULKAN(vmaCreateBuffer(
+                allocator,
+                &bufferInfo,
+                &allocInfo,
+                reinterpret_cast<VkBuffer*>(&buffer),
+                &allocation,
+                nullptr
+            ));
+
+            return buffer;
         }
 
 	}

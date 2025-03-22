@@ -95,8 +95,6 @@ namespace saf {
         vk::Buffer m_vkVertexBuffer = nullptr;
         vk::Buffer m_vkIndexBuffer = nullptr;
 
-        Vertex* m_VertexArrayTransformed = nullptr;
-
         std::vector<const char*> m_vkLayers{};
         std::vector<const char*> m_vkExtensions{};
         vk::Instance m_vkInstance = nullptr;

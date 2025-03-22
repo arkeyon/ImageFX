@@ -143,8 +143,7 @@ namespace saf {
         ImGui_ImplVulkan_Shutdown();
 
         if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
-        vmaUnmapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation);
-        vmaUnmapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation);
+
         if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaVertexBufferAllocation);
         if (m_vkIndexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkIndexBuffer, m_vmaIndexBufferAllocation);
 
@@ -161,19 +160,6 @@ namespace saf {
 
     void Graphics::Render()
     {
-
-        static float angle = 0.f;
-        angle += 0.001f;
-
-        for (int i = 0; i < m_VertexBuffer.size(); i++)
-        {
-            auto& pos = m_VertexBuffer[i].pos;
-            m_VertexArrayTransformed[i].pos.x = pos.x * cosf(angle) - pos.y * sinf(angle);
-            m_VertexArrayTransformed[i].pos.y = pos.x * sinf(angle) + pos.y * cosf(angle);
-
-            m_VertexArrayTransformed[i].color = color;
-        }
-
         vk::Semaphore acquire_semaphore;
         if (m_vkRecycleSemaphores.empty())
         {
@@ -405,14 +391,14 @@ namespace saf {
         vk::SwapchainKHR old_swapchain = m_vkSwapchainData.swapchain;
 
         vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
-        for (const auto mode : supported_preset_modes)
-        {
-            if (mode == vk::PresentModeKHR::eMailbox)
-            {
-                present_mode = mode;
-                break;
-            }
-        }
+        //for (const auto mode : supported_preset_modes)
+        //{
+        //    if (mode == vk::PresentModeKHR::eMailbox)
+        //    {
+        //        present_mode = mode;
+        //        break;
+        //    }
+        //}
 
         if (present_mode == vk::PresentModeKHR::eFifo) IFX_TRACE("Vulkan physical device doesnt support mailbox present mode, defaulting to FiFo");
         else IFX_TRACE("Vulkan using mailbox present mode");
@@ -539,53 +525,43 @@ namespace saf {
 
     void Graphics::CreateVertexBuffer()
     {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = sizeof(Vertex) * m_VertexBuffer.size();
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-        allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        VmaAllocation allocation;
+        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
+        void* data;
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, &data));
+        memcpy(data, static_cast<void*>(&m_VertexBuffer), sizeof(Vertex) * m_VertexBuffer.size());
+        vmaUnmapMemory(m_vmaAllocator, allocation);
 
-        ERR_GUARD_VULKAN(vmaCreateBuffer(
-            m_vmaAllocator,
-            &bufferInfo,
-            &allocInfo,
-            reinterpret_cast<VkBuffer*>(&m_vkVertexBuffer),
-            &m_vmaVertexBufferAllocation,
-            nullptr
-        ));
+        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY, VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, m_vmaAllocator, m_vmaVertexBufferAllocation);
 
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaVertexBufferAllocation, reinterpret_cast<void**>(&m_VertexArrayTransformed)));
+        saf::vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [&stage_buffer, this](vk::CommandBuffer cmd)
+            {
+                vk::BufferCopy buffer_copy(0, 0, m_VertexBuffer.size() * sizeof(Vertex));
+                cmd.copyBuffer(stage_buffer, m_vkVertexBuffer, buffer_copy);
+            });
+
+        vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
     }
 
     void Graphics::CreateIndexBuffer()
     {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = sizeof(uint32_t) * m_IndexBuffer.size();
-        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VmaAllocation allocation;
+        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(uint32_t) * m_IndexBuffer.size(), vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
+        void* data;
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, &data));
+        memcpy(data, static_cast<void*>(&m_IndexBuffer), sizeof(uint32_t) * m_IndexBuffer.size());
+        vmaUnmapMemory(m_vmaAllocator, allocation);
 
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-        allocInfo.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+        m_vkIndexBuffer = vkhelper::create_buffer(sizeof(uint32_t) * m_IndexBuffer.size(), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY, VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, m_vmaAllocator, m_vmaIndexBufferAllocation);
 
-        ERR_GUARD_VULKAN(vmaCreateBuffer(
-            m_vmaAllocator,
-            &bufferInfo,
-            &allocInfo,
-            reinterpret_cast<VkBuffer*>(&m_vkIndexBuffer),
-            &m_vmaIndexBufferAllocation,
-            nullptr
-        ));
+        saf::vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [&stage_buffer, this](vk::CommandBuffer cmd)
+            {
+                vk::BufferCopy buffer_copy(0, 0, m_IndexBuffer.size() * sizeof(uint32_t));
+                cmd.copyBuffer(stage_buffer, m_vkIndexBuffer, buffer_copy);
+            });
 
-        uint32_t* indices;
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation, reinterpret_cast<void**>(&indices)));
-
-        memcpy(indices, m_IndexBuffer.data(), sizeof(uint32_t) * m_IndexBuffer.size());
+        vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
     }
 
     void Graphics::CreateBuffer()
