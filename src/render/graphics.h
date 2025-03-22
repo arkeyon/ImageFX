@@ -75,6 +75,7 @@ namespace saf {
         void CreatePipeline();
         void CreateVertexBuffer();
         void CreateIndexBuffer();
+        void CreateBuffer();
         void RenderTri(uint32_t index);
 
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);

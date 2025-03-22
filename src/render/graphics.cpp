@@ -81,13 +81,6 @@ namespace saf {
 
         CreateSwapchain();
 
-        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
-
-        CreatePipeline();
-
-        CreateVertexBuffer();
-        CreateIndexBuffer();
-
         vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { m_vkSwapchainData.format }, vk::Format::eUndefined, vk::Format::eUndefined);
 
         VkDescriptorPoolSize pool_sizes[] =
@@ -132,6 +125,13 @@ namespace saf {
         ImGui_ImplVulkan_Init(&imgui_vulkan_impl_info);
 
         ImGui_ImplVulkan_CreateFontsTexture();
+
+        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
+                                                                 
+        CreatePipeline();                                        
+                                                                 
+        CreateVertexBuffer();                                    
+        CreateIndexBuffer();                                     
 	}
 
 	void Graphics::Destroy()
@@ -586,6 +586,10 @@ namespace saf {
         ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, m_vmaIndexBufferAllocation, reinterpret_cast<void**>(&indices)));
 
         memcpy(indices, m_IndexBuffer.data(), sizeof(uint32_t) * m_IndexBuffer.size());
+    }
+
+    void Graphics::CreateBuffer()
+    {
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)
