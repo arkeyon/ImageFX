@@ -19,8 +19,18 @@ namespace saf {
 
     Graphics::Graphics()
     {
-        m_vkLayers = { "VK_LAYER_KHRONOS_validation" };
-        m_vkExtensions = { "VK_KHR_portability_enumeration", "VK_EXT_debug_utils" };
+        m_vkLayers = {
+#ifdef SAF_DEBUG
+            "VK_LAYER_KHRONOS_validation"
+#endif
+        };
+
+        m_vkExtensions = {
+            "VK_KHR_portability_enumeration",
+#ifdef SAF_DEBUG
+            "VK_EXT_debug_utils"
+#endif
+        };
     }
 
     Graphics::~Graphics()
@@ -39,7 +49,9 @@ namespace saf {
         for (int n = 0; n < glfw_extension_count; ++n) m_vkExtensions.emplace_back(glfw_extensions[n]);
 
         m_vkInstance = vkhelper::CreateInstance(m_vkExtensions, m_vkLayers);
+#ifdef SAF_DEBUG
         m_vkMessenger = vkhelper::CreateDebugMessenger(m_vkInstance);
+#endif
         
         ERR_GUARD_VULKAN(glfwCreateWindowSurface(m_vkInstance, glfw_window, nullptr, reinterpret_cast<VkSurfaceKHR*>(&m_vkSurface)));
         if (!m_vkSurface) IFX_ERROR("Vulkan failed to create glfw surface");
@@ -158,8 +170,9 @@ namespace saf {
         if (m_vkInstance) m_vkInstance.destroy();
 	}
 
-    void Graphics::Render()
+    bool Graphics::Render()
     {
+
         vk::Semaphore acquire_semaphore;
         if (m_vkRecycleSemaphores.empty())
         {
@@ -180,7 +193,7 @@ namespace saf {
             m_vkRecycleSemaphores.push_back(acquire_semaphore);
             IFX_WARN("Vulkan failed acquireNextImage");
             m_vkQueue.waitIdle();
-            return;
+            return false;
         }
         else
         {
@@ -212,7 +225,6 @@ namespace saf {
             }
 
             m_vkFramesData[image].swapchain_acquire_semaphore = acquire_semaphore;
-
         }
 
         RenderTri(image);
@@ -225,6 +237,8 @@ namespace saf {
         {
             IFX_ERROR("Failed to present swapchain image.");
         }
+        
+        return true;
     }
 
     void Graphics::RenderTri(uint32_t index)
@@ -391,14 +405,14 @@ namespace saf {
         vk::SwapchainKHR old_swapchain = m_vkSwapchainData.swapchain;
 
         vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
-        //for (const auto mode : supported_preset_modes)
-        //{
-        //    if (mode == vk::PresentModeKHR::eMailbox)
-        //    {
-        //        present_mode = mode;
-        //        break;
-        //    }
-        //}
+        for (const auto mode : supported_preset_modes)
+        {
+            if (mode == vk::PresentModeKHR::eMailbox)
+            {
+                present_mode = mode;
+                break;
+            }
+        }
 
         if (present_mode == vk::PresentModeKHR::eFifo) IFX_TRACE("Vulkan physical device doesnt support mailbox present mode, defaulting to FiFo");
         else IFX_TRACE("Vulkan using mailbox present mode");
@@ -562,10 +576,6 @@ namespace saf {
             });
 
         vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
-    }
-
-    void Graphics::CreateBuffer()
-    {
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)

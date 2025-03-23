@@ -67,7 +67,7 @@ namespace saf {
 		void Init(GLFWwindow* glfw_window, uint32_t width, uint32_t height);
         void Destroy();
 
-        void Render();
+        bool Render();
 
         glm::vec3 color = glm::vec3(0.5f, 0.5f, 0.f);
 	private:
@@ -75,7 +75,6 @@ namespace saf {
         void CreatePipeline();
         void CreateVertexBuffer();
         void CreateIndexBuffer();
-        void CreateBuffer();
         void RenderTri(uint32_t index);
 
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);

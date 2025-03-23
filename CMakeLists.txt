@@ -73,7 +73,6 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(ImageFX PUBLIC "-Wall")
-target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
 
 if (MSVC)
 	target_compile_options(${PROJECT_NAME} PUBLIC "-Wall;/utf-8")
@@ -81,6 +80,15 @@ if (MSVC)
 else()
 	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${PROJECT_BINARY_DIR})
 endif()
+
+target_compile_definitions(${PROJECT_NAME}
+    PUBLIC
+      $<$<CONFIG:Debug>:SAF_DEBUG>
+      $<$<CONFIG:RelWithDebInfo>:SAF_DEBUG>
+      $<$<CONFIG:Release>:SAF_RELEASE>
+      $<$<CONFIG:MinSizeRel>:SAF_RELEASE>
+	  VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE imgui)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)

@@ -91,7 +91,8 @@ namespace saf {
 
     int printFPS() {
         static auto oldTime = std::chrono::high_resolution_clock::now();
-        static int fps; fps++;
+        static int fps;
+        fps++;
 
 
         static int second_fps = 0;
@@ -106,16 +107,26 @@ namespace saf {
         return second_fps;
     }
 
+    int maxfps = 60;
+
     void Window::Update()
     {
         glfwPollEvents();
+
+        static auto oldTime = std::chrono::high_resolution_clock::now();
+        const int us = 1000000 / maxfps;
+
+        if (std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - oldTime) < std::chrono::microseconds{ us })
+        {
+            return;
+        }
+        oldTime = std::chrono::high_resolution_clock::now();
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         static int fps = 0;
-        fps = printFPS();
 
         ImGui::Begin("Debug");
         ImGui::Text("FPS: %d", fps);
@@ -124,7 +135,8 @@ namespace saf {
 
         ImGui::End();
 
-        m_Graphics->Render();
+        
+        if (m_Graphics->Render()) fps = printFPS();
     }
 
 }
