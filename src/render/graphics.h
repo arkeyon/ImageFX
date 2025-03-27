@@ -47,8 +47,9 @@ namespace saf {
     };
 
     struct Vertex {
-        glm::vec2 pos;
-        glm::vec3 color;
+        glm::vec3 pos;
+        glm::vec4 color;
+        glm::vec2 tex_coord;
 
         static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
             return { vk::VertexInputBindingDescription(0, sizeof(Vertex)) };
@@ -75,18 +76,19 @@ namespace saf {
         void CreatePipeline();
         void CreateVertexBuffer();
         void CreateIndexBuffer();
-        void RenderTri(uint32_t index);
+        uint8_t* SetupFont(const std::string& fontFile);
 
+        void RenderTri(uint32_t index);
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);
 
         uint32_t m_Width{};
         uint32_t m_Height{};
 
         std::array<Vertex, 6> m_VertexBuffer = {
-            Vertex{glm::vec2(-0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
-            Vertex{glm::vec2(+0.5f, -0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
-            Vertex{glm::vec2(+0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)},
-            Vertex{glm::vec2(-0.5f, +0.5f), glm::vec3(0.5f, 0.5f, 0.f)}
+            Vertex{glm::vec3(-0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
+            Vertex{glm::vec3(+0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
+            Vertex{glm::vec3(+0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
+            Vertex{glm::vec3(-0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)}
         };
 
         std::array<uint32_t, 6> m_IndexBuffer = {0, 1, 2, 0, 2, 3};
@@ -110,13 +112,19 @@ namespace saf {
         std::vector<FrameData> m_vkFramesData{};
         std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
 
-        std::deque<std::function<void()>> m_vkDeletionQueue;
+        //std::deque<std::function<void()>> m_vkDeletionQueue;
+
+        VmaAllocation m_vmaFontAtlasAllocation;
 
         vk::DescriptorPool m_vkDescriptorPool;
 
         VmaAllocator m_vmaAllocator{};
         VmaAllocation m_vmaVertexBufferAllocation{};
         VmaAllocation m_vmaIndexBufferAllocation{};
+
+        VmaAllocation m_vmaFontAtlasBufferAllocation{};
+        vk::Image m_vkFontAtlas{};
+        vk::ImageView m_vkFontAtlasBuffer;
 	};
 
 }

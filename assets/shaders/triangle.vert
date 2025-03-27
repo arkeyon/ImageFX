@@ -1,9 +1,10 @@
 #version 450
 
-layout(location = 0) in vec2 positions;
-layout(location = 1) in vec3 colors;
+layout(location = 0) in vec3 positions;
+layout(location = 1) in vec4 colors;
+layout(location = 2) in vec2 tex_coord;
 
-layout(location = 0) out vec3 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 /*
 vec2 positions[3] = vec2[](
@@ -19,6 +20,6 @@ vec3 colors[3] = vec3[](
 );*/
 
 void main() {
-    gl_Position = vec4(positions, 0.0, 1.0);
+    gl_Position = vec4(positions, 1.0);
     fragColor = colors;
 }

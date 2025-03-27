@@ -15,7 +15,24 @@
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include <stb/stb_truetype.h>
+#include <stb/stb_image.h>
+#include <stb/stb_image_write.h>
+
 namespace saf {
+
+    // Font Atlas settings:
+    const uint32_t codePointOfFirstChar = 32;      // ASCII of ' '(Space)
+    const uint32_t charsToIncludeInFontAtlas = 95; // Include 95 charecters
+
+    const uint32_t fontAtlasWidth = 512;
+    const uint32_t fontAtlasHeight = 512;
+
+    const float fontSize = 64.0f;
+
+    stbtt_packedchar packedChars[charsToIncludeInFontAtlas];
+    stbtt_aligned_quad alignedQuads[charsToIncludeInFontAtlas];
+
 
     Graphics::Graphics()
     {
@@ -143,7 +160,75 @@ namespace saf {
         CreatePipeline();                                        
                                                                  
         CreateVertexBuffer();                                    
-        CreateIndexBuffer();                                     
+        CreateIndexBuffer();
+
+        uint8_t* fontdata = SetupFont("C:/Windows/Fonts/arial.ttf");
+
+        vk::ImageCreateInfo image_create_info(
+            {},
+            vk::ImageType::e2D,
+            vk::Format::eR8Sint,
+            vk::Extent3D(fontAtlasWidth,fontAtlasHeight, 1),
+            1,
+            1,
+            vk::SampleCountFlagBits::e1,
+            vk::ImageTiling::eOptimal,
+            vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+            vk::SharingMode::eExclusive,
+            {},
+            {},
+            vk::ImageLayout::eUndefined
+        );
+        VmaAllocationCreateInfo alloc_create_info {};
+        alloc_create_info.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        alloc_create_info.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+        ERR_GUARD_VULKAN(vmaCreateImage(m_vmaAllocator, reinterpret_cast<VkImageCreateInfo*>(&image_create_info), &alloc_create_info, reinterpret_cast<VkImage*>(&m_vkFontAtlas), &m_vmaFontAtlasAllocation, nullptr));
+
+        VmaAllocation allocation;
+        vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t)* fontAtlasWidth* fontAtlasHeight, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
+
+        uint8_t* temp;
+        vmaMapMemory(m_vmaAllocator, allocation, reinterpret_cast<void**>(&temp));
+        memcpy(temp, fontdata, sizeof(uint8_t)* fontAtlasWidth* fontAtlasHeight);
+        vmaUnmapMemory(m_vmaAllocator, allocation);
+
+        vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [stageing_buffer, this](vk::CommandBuffer cmd)
+            {
+                vk::ImageMemoryBarrier image_memory_barrier_pre(
+                    vk::AccessFlagBits::eNone,
+                    vk::AccessFlagBits::eTransferWrite,
+                    vk::ImageLayout::eUndefined,
+                    vk::ImageLayout::eTransferDstOptimal,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    m_vkFontAtlas,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
+
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
+
+                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1));
+
+                cmd.copyBufferToImage(stageing_buffer, m_vkFontAtlas, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
+
+                vk::ImageMemoryBarrier image_memory_barrier_post(
+                    vk::AccessFlagBits::eTransferWrite,
+                    vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eTransferDstOptimal,
+                    vk::ImageLayout::eShaderReadOnlyOptimal,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    m_vkFontAtlas,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
+
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
+            });
+
+        vmaDestroyBuffer(m_vmaAllocator, stageing_buffer, allocation);
+
+        vk::ImageViewCreateInfo imageview_create_info({}, m_vkFontAtlas, );
 	}
 
 	void Graphics::Destroy()
@@ -494,9 +579,10 @@ namespace saf {
             )
         };
 
-        std::array<vk::VertexInputAttributeDescription, 2> vertex_input_attrb_descs{
-            vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos)),
-            vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color))
+        std::array<vk::VertexInputAttributeDescription, 3> vertex_input_attrb_descs{
+            vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
+            vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)),
+            vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, tex_coord))
         };
 
         auto vertex_input_binding_descs = Vertex::getBindingDescription();
@@ -576,6 +662,75 @@ namespace saf {
             });
 
         vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
+    }
+
+    uint8_t* Graphics::SetupFont(const std::string& fontFile)
+    {
+        // Read the font file
+        std::ifstream inputStream(fontFile.c_str(), std::ios::binary);
+
+        inputStream.seekg(0, std::ios::end);
+        auto&& fontFileSize = inputStream.tellg();
+        inputStream.seekg(0, std::ios::beg);
+
+        uint8_t* fontDataBuf = new uint8_t[fontFileSize];
+
+        inputStream.read((char*)fontDataBuf, fontFileSize);
+
+        stbtt_fontinfo fontInfo = {};
+
+        uint32_t fontCount = stbtt_GetNumberOfFonts(fontDataBuf);
+        std::cout << "Font File: " << fontFile << " has " << fontCount << " fonts\n";
+
+        if (!stbtt_InitFont(&fontInfo, fontDataBuf, 0))
+            std::cerr << "stbtt_InitFont() Failed!\n";
+
+        uint8_t* fontAtlasTextureData = new uint8_t[fontAtlasWidth * fontAtlasHeight];
+
+        stbtt_pack_context ctx;
+
+        stbtt_PackBegin(
+            &ctx,                                     // stbtt_pack_context (this call will initialize it) 
+            (unsigned char*)fontAtlasTextureData,     // Font Atlas texture data
+            fontAtlasWidth,                           // Width of the font atlas texture
+            fontAtlasHeight,                          // Height of the font atlas texture
+            0,                                        // Stride in bytes
+            1,                                        // Padding between the glyphs
+            nullptr);
+
+        stbtt_PackFontRange(
+            &ctx,                                     // stbtt_pack_context
+            fontDataBuf,                              // Font Atlas texture data
+            0,                                        // Font Index                                 
+            fontSize,                                 // Size of font in pixels. (Use STBTT_POINT_SIZE(fontSize) to use points) 
+            codePointOfFirstChar,                     // Code point of the first charecter
+            charsToIncludeInFontAtlas,                // No. of charecters to be included in the font atlas 
+            packedChars                    // stbtt_packedchar array, this struct will contain the data to render a glyph
+        );
+        stbtt_PackEnd(&ctx);
+
+        for (int i = 0; i < charsToIncludeInFontAtlas; i++)
+        {
+            float unusedX, unusedY;
+
+            stbtt_GetPackedQuad(
+                packedChars,              // Array of stbtt_packedchar
+                fontAtlasWidth,                      // Width of the font atlas texture
+                fontAtlasHeight,                     // Height of the font atlas texture
+                i,                                   // Index of the glyph
+                &unusedX, &unusedY,                  // current position of the glyph in screen pixel coordinates, (not required as we have a different corrdinate system)
+                &alignedQuads[i],         // stbtt_alligned_quad struct. (this struct mainly consists of the texture coordinates)
+                0                                    // Allign X and Y position to a integer (doesn't matter because we are not using 'unusedX' and 'unusedY')
+            );
+        }
+
+        delete[] fontDataBuf;
+
+        // Optionally write the font atlas texture as a png file.
+
+        stbi_write_png("fontAtlas.png", fontAtlasWidth, fontAtlasHeight, 1, fontAtlasTextureData, fontAtlasWidth);
+
+        return fontAtlasTextureData;
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)
