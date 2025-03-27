@@ -19,6 +19,8 @@
 #include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 
+#include <glm/glm/gtx/matrix_transform.hpp>
+
 namespace saf {
 
     // Font Atlas settings:
@@ -46,6 +48,7 @@ namespace saf {
             "VK_KHR_portability_enumeration",
 #ifdef SAF_DEBUG
             "VK_EXT_debug_utils"
+
 #endif
         };
     }
@@ -111,32 +114,10 @@ namespace saf {
         CreateSwapchain();
 
         vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { m_vkSwapchainData.format }, vk::Format::eUndefined, vk::Format::eUndefined);
+        
+        CreateDescriptors();
 
-        VkDescriptorPoolSize pool_sizes[] =
-        {
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-        };
-    
-        VkDescriptorPoolCreateInfo pool_info = {};
-        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        pool_info.maxSets = 1000;
-        pool_info.poolSizeCount = std::size(pool_sizes);
-        pool_info.pPoolSizes = pool_sizes;
-    
-        m_vkDescriptorPool = m_vkDevice.createDescriptorPool(pool_info);
-
-        ImGui_ImplVulkan_InitInfo imgui_vulkan_impl_info {};
+        ImGui_ImplVulkan_InitInfo imgui_vulkan_impl_info{};
         imgui_vulkan_impl_info.ApiVersion = VK_API_VERSION_1_3;
         imgui_vulkan_impl_info.Instance = m_vkInstance;
         imgui_vulkan_impl_info.PhysicalDevice = m_vkPhysicalDevice;
@@ -150,85 +131,14 @@ namespace saf {
         imgui_vulkan_impl_info.PipelineRenderingCreateInfo = static_cast<VkPipelineRenderingCreateInfoKHR>(pipeline_rendering_create_info);
         imgui_vulkan_impl_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
         //imgui_vulkan_impl_info.Allocation = m_vkAll
-
         ImGui_ImplVulkan_Init(&imgui_vulkan_impl_info);
 
         ImGui_ImplVulkan_CreateFontsTexture();
-
-        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({});
                                                                  
         CreatePipeline();                                        
                                                                  
         CreateVertexBuffer();                                    
         CreateIndexBuffer();
-
-        uint8_t* fontdata = SetupFont("C:/Windows/Fonts/arial.ttf");
-
-        vk::ImageCreateInfo image_create_info(
-            {},
-            vk::ImageType::e2D,
-            vk::Format::eR8Sint,
-            vk::Extent3D(fontAtlasWidth,fontAtlasHeight, 1),
-            1,
-            1,
-            vk::SampleCountFlagBits::e1,
-            vk::ImageTiling::eOptimal,
-            vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-            vk::SharingMode::eExclusive,
-            {},
-            {},
-            vk::ImageLayout::eUndefined
-        );
-        VmaAllocationCreateInfo alloc_create_info {};
-        alloc_create_info.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-        alloc_create_info.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-        ERR_GUARD_VULKAN(vmaCreateImage(m_vmaAllocator, reinterpret_cast<VkImageCreateInfo*>(&image_create_info), &alloc_create_info, reinterpret_cast<VkImage*>(&m_vkFontAtlas), &m_vmaFontAtlasAllocation, nullptr));
-
-        VmaAllocation allocation;
-        vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t)* fontAtlasWidth* fontAtlasHeight, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
-
-        uint8_t* temp;
-        vmaMapMemory(m_vmaAllocator, allocation, reinterpret_cast<void**>(&temp));
-        memcpy(temp, fontdata, sizeof(uint8_t)* fontAtlasWidth* fontAtlasHeight);
-        vmaUnmapMemory(m_vmaAllocator, allocation);
-
-        vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [stageing_buffer, this](vk::CommandBuffer cmd)
-            {
-                vk::ImageMemoryBarrier image_memory_barrier_pre(
-                    vk::AccessFlagBits::eNone,
-                    vk::AccessFlagBits::eTransferWrite,
-                    vk::ImageLayout::eUndefined,
-                    vk::ImageLayout::eTransferDstOptimal,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    m_vkFontAtlas,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
-
-                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1));
-
-                cmd.copyBufferToImage(stageing_buffer, m_vkFontAtlas, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
-
-                vk::ImageMemoryBarrier image_memory_barrier_post(
-                    vk::AccessFlagBits::eTransferWrite,
-                    vk::AccessFlagBits::eShaderRead,
-                    vk::ImageLayout::eTransferDstOptimal,
-                    vk::ImageLayout::eShaderReadOnlyOptimal,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    m_vkFontAtlas,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
-            });
-
-        vmaDestroyBuffer(m_vmaAllocator, stageing_buffer, allocation);
-
-        vk::ImageViewCreateInfo imageview_create_info({}, m_vkFontAtlas, );
 	}
 
 	void Graphics::Destroy()
@@ -378,6 +288,8 @@ namespace saf {
 
         cmd.bindVertexBuffers(0, {m_vkVertexBuffer}, {0});
         cmd.bindIndexBuffer(m_vkIndexBuffer, 0, vk::IndexType::eUint32);
+
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkDescriptorSet }, {});
 
         // Draw three vertices with one instance.
         cmd.drawIndexed(6, 1, 0, 0, 0);
@@ -560,6 +472,151 @@ namespace saf {
         }
     }
 
+    void Graphics::CreateDescriptors()
+    {
+        std::array<vk::DescriptorPoolSize, 11> pool_sizes =
+        {
+            vk::DescriptorPoolSize(vk::DescriptorType::eSampler, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eSampledImage, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformTexelBuffer, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageTexelBuffer, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eStorageBufferDynamic, 1000),
+            vk::DescriptorPoolSize(vk::DescriptorType::eInputAttachment, 1000)
+        };
+
+        vk::DescriptorPoolCreateInfo pool_create_info{};
+        pool_create_info.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+        pool_create_info.maxSets = 1000;
+        pool_create_info.poolSizeCount = std::size(pool_sizes);
+        pool_create_info.pPoolSizes = pool_sizes.data();
+
+        m_vkDescriptorPool = m_vkDevice.createDescriptorPool(pool_create_info);
+
+        uint8_t* rawfontdata = SetupFont("C:/Windows/Fonts/arial.ttf");
+
+        vk::ImageCreateInfo image_create_info(
+            {},
+            vk::ImageType::e2D,
+            vk::Format::eR8Unorm,
+            vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1),
+            1,
+            1,
+            vk::SampleCountFlagBits::e1,
+            vk::ImageTiling::eOptimal,
+            vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+            vk::SharingMode::eExclusive,
+            {},
+            {},
+            vk::ImageLayout::eUndefined
+        );
+        VmaAllocationCreateInfo alloc_create_info{};
+        alloc_create_info.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+        alloc_create_info.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+        ERR_GUARD_VULKAN(vmaCreateImage(m_vmaAllocator, reinterpret_cast<VkImageCreateInfo*>(&image_create_info), &alloc_create_info, reinterpret_cast<VkImage*>(&m_vkFontAtlas), &m_vmaFontAtlasAllocation, nullptr));
+
+        VmaAllocation allocation;
+        vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * fontAtlasWidth * fontAtlasHeight * 4, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
+
+        uint8_t* fontdata;
+        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, reinterpret_cast<void**>(&fontdata)));
+        memcpy(fontdata, rawfontdata, sizeof(uint8_t) * fontAtlasWidth * fontAtlasHeight);
+        vmaUnmapMemory(m_vmaAllocator, allocation);
+
+        vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [stageing_buffer, this](vk::CommandBuffer cmd)
+            {
+                vk::ImageMemoryBarrier image_memory_barrier_pre(
+                    vk::AccessFlagBits::eNone,
+                    vk::AccessFlagBits::eTransferWrite,
+                    vk::ImageLayout::eUndefined,
+                    vk::ImageLayout::eTransferDstOptimal,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    m_vkFontAtlas,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
+
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
+
+                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1));
+
+                cmd.copyBufferToImage(stageing_buffer, m_vkFontAtlas, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
+
+                vk::ImageMemoryBarrier image_memory_barrier_post(
+                    vk::AccessFlagBits::eTransferWrite,
+                    vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eTransferDstOptimal,
+                    vk::ImageLayout::eShaderReadOnlyOptimal,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    m_vkFontAtlas,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
+
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
+            });
+
+        vmaDestroyBuffer(m_vmaAllocator, stageing_buffer, allocation);
+
+        vk::ImageViewCreateInfo imageview_create_info({}, m_vkFontAtlas, vk::ImageViewType::e2D, vk::Format::eR8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+        vk::ImageView image_view = m_vkDevice.createImageView(imageview_create_info);
+
+        vk::SamplerCreateInfo sampler_create_info{};
+        sampler_create_info.addressModeU = vk::SamplerAddressMode::eRepeat;
+        sampler_create_info.addressModeV = vk::SamplerAddressMode::eRepeat;
+        sampler_create_info.addressModeW = vk::SamplerAddressMode::eRepeat;
+
+        sampler_create_info.maxLod = 0;
+        sampler_create_info.minLod = 0;
+        sampler_create_info.mipLodBias = 0.f;
+        sampler_create_info.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+        sampler_create_info.compareEnable = vk::False;
+        sampler_create_info.compareOp = vk::CompareOp::eAlways;
+
+        sampler_create_info.minFilter = vk::Filter::eLinear;
+        sampler_create_info.magFilter = vk::Filter::eLinear;
+        sampler_create_info.anisotropyEnable = vk::True;
+        sampler_create_info.maxAnisotropy = 1.f;
+        sampler_create_info.unnormalizedCoordinates = vk::False;
+        sampler_create_info.borderColor = vk::BorderColor::eFloatOpaqueBlack;
+
+        vk::Sampler sampler = m_vkDevice.createSampler(sampler_create_info);
+
+        vk::DescriptorSetLayoutBinding desc_layout_binding{};
+        desc_layout_binding.binding = 0;
+        desc_layout_binding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        desc_layout_binding.descriptorCount = 1;
+        desc_layout_binding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+        desc_layout_binding.pImmutableSamplers = nullptr;
+
+        vk::DescriptorSetLayoutCreateInfo desc_layout_info({}, { desc_layout_binding });
+        vk::DescriptorSetLayout desc_layout = m_vkDevice.createDescriptorSetLayout(desc_layout_info);
+
+        vk::DescriptorSetAllocateInfo desc_alloc_info{};
+        desc_alloc_info.descriptorPool = m_vkDescriptorPool;
+        desc_alloc_info.descriptorSetCount = 1;
+        desc_alloc_info.pSetLayouts = &desc_layout;
+
+        m_vkDescriptorSet = m_vkDevice.allocateDescriptorSets(desc_alloc_info)[0];
+
+        vk::DescriptorImageInfo desc_image_info{};
+        desc_image_info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+        desc_image_info.imageView = image_view;
+        desc_image_info.sampler = sampler;
+
+        vk::WriteDescriptorSet desc_set_write(m_vkDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
+        m_vkDevice.updateDescriptorSets(desc_set_write, {});
+
+        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, desc_layout);
+        m_vkPipelineLayout = m_vkDevice.createPipelineLayout({ pipeline_layout_info });
+    }
+
     void Graphics::CreatePipeline()
     {
         IFX_TRACE("Window CreatePipeline");
@@ -568,13 +625,13 @@ namespace saf {
             vk::PipelineShaderStageCreateInfo(
                 {},
                 vk::ShaderStageFlagBits::eVertex,
-                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/triangle.vert"),
+                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/fonts.vert"),
                 "main"
             ),
             vk::PipelineShaderStageCreateInfo(
                 {},
                 vk::ShaderStageFlagBits::eFragment,
-                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/triangle.frag"),
+                vkhelper::CreateShaderModule(m_vkDevice, "assets/shaders/fonts.frag"),
                 "main"
             )
         };

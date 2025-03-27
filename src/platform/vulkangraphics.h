@@ -243,10 +243,10 @@ namespace saf {
             }
 
             const vk::ApplicationInfo applicationInfo(
+                g_ApplicationName,
+                VK_MAKE_API_VERSION(0, 1, 0, 0),
                 g_EngineName,
                 VK_MAKE_API_VERSION(0, 1, 0, 0),
-                g_ApplicationName,
-                VK_MAKE_API_VERSION(0, 1, 3, 0),
                 VK_API_VERSION_1_3
             );
 
@@ -339,10 +339,11 @@ namespace saf {
 
             const float queue_priority = 1.f;
             const vk::DeviceQueueCreateInfo queue_create_info({}, graphics_queue_family, 1U, &queue_priority );
-            const vk::PhysicalDeviceFeatures device_features{};
+            vk::PhysicalDeviceFeatures device_features{};
+            device_features.samplerAnisotropy = vk::True;
+
             vk::PhysicalDeviceDynamicRenderingFeatures device_dynamic_features{};
             device_dynamic_features.dynamicRendering = VK_TRUE;
-
             const vk::DeviceCreateInfo device_create_info(
                 {},
                 1,

@@ -73,6 +73,7 @@ namespace saf {
         glm::vec3 color = glm::vec3(0.5f, 0.5f, 0.f);
 	private:
         void CreateSwapchain();
+        void CreateDescriptors();
         void CreatePipeline();
         void CreateVertexBuffer();
         void CreateIndexBuffer();
@@ -86,9 +87,9 @@ namespace saf {
 
         std::array<Vertex, 6> m_VertexBuffer = {
             Vertex{glm::vec3(-0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
-            Vertex{glm::vec3(+0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
-            Vertex{glm::vec3(+0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
-            Vertex{glm::vec3(-0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)}
+            Vertex{glm::vec3(+0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(1.f, 0.f)},
+            Vertex{glm::vec3(+0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(1.f, 1.f)},
+            Vertex{glm::vec3(-0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 1.f)}
         };
 
         std::array<uint32_t, 6> m_IndexBuffer = {0, 1, 2, 0, 2, 3};
@@ -125,6 +126,7 @@ namespace saf {
         VmaAllocation m_vmaFontAtlasBufferAllocation{};
         vk::Image m_vkFontAtlas{};
         vk::ImageView m_vkFontAtlasBuffer;
+        vk::DescriptorSet m_vkDescriptorSet;
 	};
 
 }
