@@ -13,7 +13,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm/glm.hpp>
 #include <shaderc/shaderc.h>
-#include <vk_mem_alloc.h>
+#include <vk_mem_alloc.hpp>
 
 #include <deque>
 
@@ -56,6 +56,11 @@ namespace saf {
         }
     };
 
+    struct Uniform {
+        glm::mat4 projection_view;
+        glm::mat4 model;
+    };
+
 	class Graphics {
 	public:
         Graphics();
@@ -69,6 +74,8 @@ namespace saf {
         void Destroy();
 
         bool Render();
+        void DrawString(std::string text, glm::vec3 position, float scale = 1.f);
+        inline void ResetVertexBuffer() { m_QuadCount = 0; }
 
         glm::vec3 color = glm::vec3(0.5f, 0.5f, 0.f);
 	private:
@@ -85,14 +92,10 @@ namespace saf {
         uint32_t m_Width{};
         uint32_t m_Height{};
 
-        std::array<Vertex, 6> m_VertexBuffer = {
-            Vertex{glm::vec3(-0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 0.f)},
-            Vertex{glm::vec3(+0.5f, -0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(1.f, 0.f)},
-            Vertex{glm::vec3(+0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(1.f, 1.f)},
-            Vertex{glm::vec3(-0.5f, +0.5f, 0.f), glm::vec4(0.5f, 0.5f, 0.f, 1.f), glm::vec2(0.f, 1.f)}
-        };
-
-        std::array<uint32_t, 6> m_IndexBuffer = {0, 1, 2, 0, 2, 3};
+        const uint32_t m_MaxQuads = 1000;
+        Vertex* m_VertexBuffer;
+        uint32_t* m_IndexBuffer;
+        uint32_t m_QuadCount = 0;
 
         vk::Buffer m_vkVertexBuffer = nullptr;
         vk::Buffer m_vkIndexBuffer = nullptr;
@@ -115,18 +118,18 @@ namespace saf {
 
         //std::deque<std::function<void()>> m_vkDeletionQueue;
 
-        VmaAllocation m_vmaFontAtlasAllocation;
 
         vk::DescriptorPool m_vkDescriptorPool;
 
-        VmaAllocator m_vmaAllocator{};
-        VmaAllocation m_vmaVertexBufferAllocation{};
-        VmaAllocation m_vmaIndexBufferAllocation{};
-
-        VmaAllocation m_vmaFontAtlasBufferAllocation{};
+        vma::Allocator m_vmaAllocator{};
+        vma::Allocation m_vmaVertexBufferAllocation{};
+        vma::Allocation m_vmaIndexBufferAllocation{};
+        vma::Allocation m_vmaFontAtlasAllocation;
         vk::Image m_vkFontAtlas{};
-        vk::ImageView m_vkFontAtlasBuffer;
-        vk::DescriptorSet m_vkDescriptorSet;
+        vk::ImageView m_vkFontAtlasImageView;
+        vk::DescriptorSet m_vkFontAtlasDescriptorSet;
+        vk::DescriptorSetLayout m_vkFontDescriptorSetLayout;
+        vk::Sampler m_vkFontSampler;
 	};
 
 }

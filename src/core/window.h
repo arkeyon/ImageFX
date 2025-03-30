@@ -62,6 +62,8 @@ namespace saf {
 
         GLFWwindow* m_glfwWindow = nullptr;
         std::unique_ptr<Graphics> m_Graphics;
+
+        std::string str;
     };
 
 }

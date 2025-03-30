@@ -1,21 +1,24 @@
 #version 450
 
-layout(location = 0) in vec3 aPosition;
-layout(location = 1) in vec4 aColor;
-layout(location = 2) in vec2 aTexCoord;
+layout(location = 0) in vec3 a_Position;
+layout(location = 1) in vec4 a_Color;
+layout(location = 2) in vec2 a_TexCoord;
 
-layout(location = 0) out vec4 color;
-layout(location = 1) out vec2 texCoord;
+layout(location = 0) out struct {
+    vec4 color;
+    vec2 texCoord;
+} Out;
 
-layout(push_constant) uniform uPushConstant
+layout(push_constant) uniform PushConstant
 {
-    mat3 transform;
-}
+    mat4 projection_view;
+    mat4 model;
+} u_PC;
 
 void main()
 {
-    gl_Position = vec4(aPosition, 1.0);
+    gl_Position = u_PC.projection_view * u_PC.model * vec4(a_Position, 1.0);
 
-    color = aColor;
-    texCoord = aTexCoord;
+    Out.color = a_Color;
+    Out.texCoord = a_TexCoord;
 }

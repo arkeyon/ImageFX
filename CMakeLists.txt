@@ -14,11 +14,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package( Vulkan REQUIRED COMPONENTS shaderc_combined)
+find_package(Vulkan REQUIRED COMPONENTS shaderc_combined)
 
 add_subdirectory(dependencies/spdlog)
 add_subdirectory(dependencies/glfw)
 add_subdirectory(dependencies/VulkanMemoryAllocator)
+add_subdirectory(dependencies/VulkanMemoryAllocator-Hpp)
 
 set(IMGUI_PATH ${CMAKE_CURRENT_LIST_DIR}/dependencies/imgui)
 add_library(imgui
@@ -42,7 +43,6 @@ add_library(imgui
 
 target_include_directories(imgui PUBLIC ${IMGUI_PATH})
 target_include_directories(imgui PUBLIC dependencies/glfw/include)
-
 target_link_libraries(imgui PRIVATE Vulkan::Vulkan)
 target_link_libraries(imgui PRIVATE glfw)
 
@@ -68,6 +68,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE dependencies/stb)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies/VulkanMemoryAllocator/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${IMGUI_PATH})
+target_include_directories(${PROJECT_NAME} PRIVATE dependencies/VulkanMemoryAllocator-Hpp/include)
 
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
 
@@ -92,6 +93,6 @@ target_compile_definitions(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME} PRIVATE imgui)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
-target_link_libraries(${PROJECT_NAME} PRIVATE VulkanMemoryAllocator)
+target_link_libraries(${PROJECT_NAME} PRIVATE VulkanMemoryAllocator-Hpp)
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::shaderc_combined)
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan)

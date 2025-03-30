@@ -19,13 +19,13 @@
 #include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 
-#include <glm/glm/gtx/matrix_transform.hpp>
+#include <glm/glm/gtc/matrix_transform.hpp>
 
 namespace saf {
 
     // Font Atlas settings:
     const uint32_t codePointOfFirstChar = 32;      // ASCII of ' '(Space)
-    const uint32_t charsToIncludeInFontAtlas = 95; // Include 95 charecters
+    const uint32_t charsToIncludeInFontAtlas = 96; // Include 95 charecters
 
     const uint32_t fontAtlasWidth = 512;
     const uint32_t fontAtlasHeight = 512;
@@ -47,8 +47,7 @@ namespace saf {
         m_vkExtensions = {
             "VK_KHR_portability_enumeration",
 #ifdef SAF_DEBUG
-            "VK_EXT_debug_utils"
-
+            "VK_EXT_debug_utils",
 #endif
         };
     }
@@ -95,11 +94,11 @@ namespace saf {
                 "VK_KHR_dedicated_allocation"
             });
 
-        VmaVulkanFunctions vulkanFunctions = {};
+        vma::VulkanFunctions vulkanFunctions = {};
         vulkanFunctions.vkGetInstanceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetInstanceProcAddr;
         vulkanFunctions.vkGetDeviceProcAddr = VULKAN_HPP_DEFAULT_DISPATCHER.vkGetDeviceProcAddr;
 
-        VmaAllocatorCreateInfo vma_alloc_create_info = {};
+        vma::AllocatorCreateInfo vma_alloc_create_info = {};
         vma_alloc_create_info.device = m_vkDevice;
         vma_alloc_create_info.flags = {};
         vma_alloc_create_info.instance = m_vkInstance;
@@ -107,7 +106,8 @@ namespace saf {
         vma_alloc_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
         vma_alloc_create_info.pVulkanFunctions = &vulkanFunctions;
 
-        ERR_GUARD_VULKAN(vmaCreateAllocator(&vma_alloc_create_info, &m_vmaAllocator));
+        if (vma::createAllocator(&vma_alloc_create_info, &m_vmaAllocator) != vk::Result::eSuccess)
+            IFX_ERROR("Failed to create allocator");
 
         m_vkQueue = m_vkDevice.getQueue(m_vkGraphicsQueueIndex, 0);
 
@@ -149,16 +149,27 @@ namespace saf {
 
         ImGui_ImplVulkan_Shutdown();
 
+        if (m_vkFontDescriptorSetLayout) m_vkDevice.destroyDescriptorSetLayout(m_vkFontDescriptorSetLayout);
+        if (m_vkFontAtlasDescriptorSet) m_vkDevice.freeDescriptorSets(m_vkDescriptorPool, { m_vkFontAtlasDescriptorSet });
+
         if (m_vkDescriptorPool) m_vkDevice.destroyDescriptorPool(m_vkDescriptorPool);
 
-        if (m_vkVertexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkVertexBuffer, m_vmaVertexBufferAllocation);
-        if (m_vkIndexBuffer) vmaDestroyBuffer(m_vmaAllocator, m_vkIndexBuffer, m_vmaIndexBufferAllocation);
+        if (m_vkVertexBuffer)
+        {
+            m_vmaAllocator.unmapMemory(m_vmaVertexBufferAllocation);
+            m_vmaAllocator.destroyBuffer(m_vkVertexBuffer, m_vmaVertexBufferAllocation);
+        }
+        if (m_vkIndexBuffer) m_vmaAllocator.destroyBuffer(m_vkIndexBuffer, m_vmaIndexBufferAllocation);
+        if (m_vkFontAtlasImageView) m_vkDevice.destroyImageView(m_vkFontAtlasImageView);
+        if (m_vkFontAtlas) m_vmaAllocator.destroyImage(m_vkFontAtlas, m_vmaFontAtlasAllocation);
+        if (m_vkFontSampler) m_vkDevice.destroySampler(m_vkFontSampler);
 
         for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) m_vkDevice.destroySemaphore(semiphore);
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
         if (m_vkPipeline) m_vkDevice.destroy(m_vkPipeline);
         if (m_vkPipelineLayout) m_vkDevice.destroyPipelineLayout(m_vkPipelineLayout);
-        if (m_vmaAllocator) vmaDestroyAllocator(m_vmaAllocator);
+
+        if (m_vmaAllocator) m_vmaAllocator.destroy();
         if (m_vkDevice) m_vkDevice.destroy();
         if (m_vkSurface) m_vkInstance.destroySurfaceKHR(m_vkSurface);
         if (m_vkMessenger) m_vkInstance.destroyDebugUtilsMessengerEXT(m_vkMessenger);
@@ -255,7 +266,8 @@ namespace saf {
         vk::ImageMemoryBarrier image_memory_barrier(
             vk::AccessFlagBits::eNone,
             vk::AccessFlagBits::eColorAttachmentWrite,
-            vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+            vk::ImageLayout::eUndefined,
+            vk::ImageLayout::eColorAttachmentOptimal,
             0U,
             0U,
             swapchain_image,
@@ -289,10 +301,16 @@ namespace saf {
         cmd.bindVertexBuffers(0, {m_vkVertexBuffer}, {0});
         cmd.bindIndexBuffer(m_vkIndexBuffer, 0, vk::IndexType::eUint32);
 
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkDescriptorSet }, {});
+        Uniform uniform{};
+        uniform.projection_view = glm::mat4(1.f);
+        uniform.model = glm::mat4(1.f);
+
+        cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkFontAtlasDescriptorSet }, {});
 
         // Draw three vertices with one instance.
-        cmd.drawIndexed(6, 1, 0, 0, 0);
+        cmd.drawIndexed(m_QuadCount * 6, 1, 0, 0, 0);
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -499,94 +517,10 @@ namespace saf {
 
         uint8_t* rawfontdata = SetupFont("C:/Windows/Fonts/arial.ttf");
 
-        vk::ImageCreateInfo image_create_info(
-            {},
-            vk::ImageType::e2D,
-            vk::Format::eR8Unorm,
-            vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1),
-            1,
-            1,
-            vk::SampleCountFlagBits::e1,
-            vk::ImageTiling::eOptimal,
-            vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-            vk::SharingMode::eExclusive,
-            {},
-            {},
-            vk::ImageLayout::eUndefined
-        );
-        VmaAllocationCreateInfo alloc_create_info{};
-        alloc_create_info.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-        alloc_create_info.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-
-        ERR_GUARD_VULKAN(vmaCreateImage(m_vmaAllocator, reinterpret_cast<VkImageCreateInfo*>(&image_create_info), &alloc_create_info, reinterpret_cast<VkImage*>(&m_vkFontAtlas), &m_vmaFontAtlasAllocation, nullptr));
-
-        VmaAllocation allocation;
-        vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * fontAtlasWidth * fontAtlasHeight * 4, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
-
-        uint8_t* fontdata;
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, reinterpret_cast<void**>(&fontdata)));
-        memcpy(fontdata, rawfontdata, sizeof(uint8_t) * fontAtlasWidth * fontAtlasHeight);
-        vmaUnmapMemory(m_vmaAllocator, allocation);
-
-        vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [stageing_buffer, this](vk::CommandBuffer cmd)
-            {
-                vk::ImageMemoryBarrier image_memory_barrier_pre(
-                    vk::AccessFlagBits::eNone,
-                    vk::AccessFlagBits::eTransferWrite,
-                    vk::ImageLayout::eUndefined,
-                    vk::ImageLayout::eTransferDstOptimal,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    m_vkFontAtlas,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
-
-                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(fontAtlasWidth, fontAtlasHeight, 1));
-
-                cmd.copyBufferToImage(stageing_buffer, m_vkFontAtlas, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
-
-                vk::ImageMemoryBarrier image_memory_barrier_post(
-                    vk::AccessFlagBits::eTransferWrite,
-                    vk::AccessFlagBits::eShaderRead,
-                    vk::ImageLayout::eTransferDstOptimal,
-                    vk::ImageLayout::eShaderReadOnlyOptimal,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    m_vkFontAtlas,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
-            });
-
-        vmaDestroyBuffer(m_vmaAllocator, stageing_buffer, allocation);
+        m_vkFontAtlas = vkhelper::CreateImage(m_vkDevice, m_vkGraphicsQueueIndex, m_vmaAllocator, fontAtlasWidth, fontAtlasHeight, 1, rawfontdata, m_vmaFontAtlasAllocation);
 
         vk::ImageViewCreateInfo imageview_create_info({}, m_vkFontAtlas, vk::ImageViewType::e2D, vk::Format::eR8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-        vk::ImageView image_view = m_vkDevice.createImageView(imageview_create_info);
-
-        vk::SamplerCreateInfo sampler_create_info{};
-        sampler_create_info.addressModeU = vk::SamplerAddressMode::eRepeat;
-        sampler_create_info.addressModeV = vk::SamplerAddressMode::eRepeat;
-        sampler_create_info.addressModeW = vk::SamplerAddressMode::eRepeat;
-
-        sampler_create_info.maxLod = 0;
-        sampler_create_info.minLod = 0;
-        sampler_create_info.mipLodBias = 0.f;
-        sampler_create_info.mipmapMode = vk::SamplerMipmapMode::eLinear;
-
-        sampler_create_info.compareEnable = vk::False;
-        sampler_create_info.compareOp = vk::CompareOp::eAlways;
-
-        sampler_create_info.minFilter = vk::Filter::eLinear;
-        sampler_create_info.magFilter = vk::Filter::eLinear;
-        sampler_create_info.anisotropyEnable = vk::True;
-        sampler_create_info.maxAnisotropy = 1.f;
-        sampler_create_info.unnormalizedCoordinates = vk::False;
-        sampler_create_info.borderColor = vk::BorderColor::eFloatOpaqueBlack;
-
-        vk::Sampler sampler = m_vkDevice.createSampler(sampler_create_info);
+        m_vkFontAtlasImageView = m_vkDevice.createImageView(imageview_create_info);
 
         vk::DescriptorSetLayoutBinding desc_layout_binding{};
         desc_layout_binding.binding = 0;
@@ -596,24 +530,27 @@ namespace saf {
         desc_layout_binding.pImmutableSamplers = nullptr;
 
         vk::DescriptorSetLayoutCreateInfo desc_layout_info({}, { desc_layout_binding });
-        vk::DescriptorSetLayout desc_layout = m_vkDevice.createDescriptorSetLayout(desc_layout_info);
+        m_vkFontDescriptorSetLayout = m_vkDevice.createDescriptorSetLayout(desc_layout_info);
 
         vk::DescriptorSetAllocateInfo desc_alloc_info{};
         desc_alloc_info.descriptorPool = m_vkDescriptorPool;
         desc_alloc_info.descriptorSetCount = 1;
-        desc_alloc_info.pSetLayouts = &desc_layout;
+        desc_alloc_info.pSetLayouts = &m_vkFontDescriptorSetLayout;
 
-        m_vkDescriptorSet = m_vkDevice.allocateDescriptorSets(desc_alloc_info)[0];
+        m_vkFontAtlasDescriptorSet = m_vkDevice.allocateDescriptorSets(desc_alloc_info)[0];
+        m_vkFontSampler = vkhelper::CreateFontSampler(m_vkDevice);
 
         vk::DescriptorImageInfo desc_image_info{};
         desc_image_info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        desc_image_info.imageView = image_view;
-        desc_image_info.sampler = sampler;
+        desc_image_info.imageView = m_vkFontAtlasImageView;
+        desc_image_info.sampler = m_vkFontSampler;
 
-        vk::WriteDescriptorSet desc_set_write(m_vkDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
+        vk::WriteDescriptorSet desc_set_write(m_vkFontAtlasDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
         m_vkDevice.updateDescriptorSets(desc_set_write, {});
 
-        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, desc_layout);
+        vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
+
+        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, m_vkFontDescriptorSetLayout, pushconstant_range);
         m_vkPipelineLayout = m_vkDevice.createPipelineLayout({ pipeline_layout_info });
     }
 
@@ -682,43 +619,44 @@ namespace saf {
 
     void Graphics::CreateVertexBuffer()
     {
-
-        VmaAllocation allocation;
-        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
-        void* data;
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, &data));
-        memcpy(data, static_cast<void*>(&m_VertexBuffer), sizeof(Vertex) * m_VertexBuffer.size());
-        vmaUnmapMemory(m_vmaAllocator, allocation);
-
-        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_VertexBuffer.size(), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY, VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, m_vmaAllocator, m_vmaVertexBufferAllocation);
-
-        saf::vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [&stage_buffer, this](vk::CommandBuffer cmd)
-            {
-                vk::BufferCopy buffer_copy(0, 0, m_VertexBuffer.size() * sizeof(Vertex));
-                cmd.copyBuffer(stage_buffer, m_vkVertexBuffer, buffer_copy);
-            });
-
-        vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
+        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, m_vmaAllocator, m_vmaVertexBufferAllocation);
+        if (m_vmaAllocator.mapMemory(m_vmaVertexBufferAllocation, reinterpret_cast<void**>(&m_VertexBuffer)) != vk::Result::eSuccess)
+            IFX_ERROR("Failed to map vertex buffer");
     }
 
     void Graphics::CreateIndexBuffer()
     {
-        VmaAllocation allocation;
-        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(uint32_t) * m_IndexBuffer.size(), vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT, m_vmaAllocator, allocation);
-        void* data;
-        ERR_GUARD_VULKAN(vmaMapMemory(m_vmaAllocator, allocation, &data));
-        memcpy(data, static_cast<void*>(&m_IndexBuffer), sizeof(uint32_t) * m_IndexBuffer.size());
-        vmaUnmapMemory(m_vmaAllocator, allocation);
+        uint32_t indices[6]
+        {
+            0, 1, 2, 0, 2, 3
+        };
 
-        m_vkIndexBuffer = vkhelper::create_buffer(sizeof(uint32_t) * m_IndexBuffer.size(), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY, VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, m_vmaAllocator, m_vmaIndexBufferAllocation);
+        vma::Allocation allocation;
+        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, m_vmaAllocator, allocation);
+        uint32_t* data;
+        if (m_vmaAllocator.mapMemory(allocation, reinterpret_cast<void**>(&data)) != vk::Result::eSuccess)
+            IFX_ERROR("Failed to map index staging buffer");
+
+        for (int i = 0; i < m_MaxQuads; ++i)
+        {
+            data[i * 6 + 0] = indices[0] + i * 4;
+            data[i * 6 + 1] = indices[1] + i * 4;
+            data[i * 6 + 2] = indices[2] + i * 4;
+            data[i * 6 + 3] = indices[3] + i * 4;
+            data[i * 6 + 4] = indices[4] + i * 4;
+            data[i * 6 + 5] = indices[5] + i * 4;
+        }
+        m_vmaAllocator.unmapMemory(allocation);
+
+        m_vkIndexBuffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eGpuOnly, vma::AllocationCreateFlagBits::eDedicatedMemory, m_vmaAllocator, m_vmaIndexBufferAllocation);
 
         saf::vkhelper::immediate_submit(m_vkDevice, m_vkGraphicsQueueIndex, [&stage_buffer, this](vk::CommandBuffer cmd)
             {
-                vk::BufferCopy buffer_copy(0, 0, m_IndexBuffer.size() * sizeof(uint32_t));
+                vk::BufferCopy buffer_copy(0, 0, m_MaxQuads * 6 * sizeof(uint32_t));
                 cmd.copyBuffer(stage_buffer, m_vkIndexBuffer, buffer_copy);
             });
 
-        vmaDestroyBuffer(m_vmaAllocator, stage_buffer, allocation);
+        m_vmaAllocator.destroyBuffer(stage_buffer, allocation);
     }
 
     uint8_t* Graphics::SetupFont(const std::string& fontFile)
@@ -776,7 +714,7 @@ namespace saf {
                 fontAtlasHeight,                     // Height of the font atlas texture
                 i,                                   // Index of the glyph
                 &unusedX, &unusedY,                  // current position of the glyph in screen pixel coordinates, (not required as we have a different corrdinate system)
-                &alignedQuads[i],         // stbtt_alligned_quad struct. (this struct mainly consists of the texture coordinates)
+                &(alignedQuads[i]),         // stbtt_alligned_quad struct. (this struct mainly consists of the texture coordinates)
                 0                                    // Allign X and Y position to a integer (doesn't matter because we are not using 'unusedX' and 'unusedY')
             );
         }
@@ -788,6 +726,68 @@ namespace saf {
         stbi_write_png("fontAtlas.png", fontAtlasWidth, fontAtlasHeight, 1, fontAtlasTextureData, fontAtlasWidth);
 
         return fontAtlasTextureData;
+    }
+
+    void Graphics::DrawString(std::string text, glm::vec3 position, float scale)
+    {
+        glm::vec3 localPosition = position;
+        float pixelscale = 2.f / static_cast<float>(m_Height);
+
+        for (char ch : text)
+        {
+            // Check if the charecter glyph is in the font atlas.
+            if (ch >= codePointOfFirstChar && ch <= codePointOfFirstChar + charsToIncludeInFontAtlas)
+            {
+
+                // Retrive the data that is used to render a glyph of charecter 'ch'
+                stbtt_packedchar* packedChar = &packedChars[ch - codePointOfFirstChar];
+                stbtt_aligned_quad* alignedQuad = &alignedQuads[ch - codePointOfFirstChar];
+
+                // The units of the fields of the above structs are in pixels, 
+                // convert them to a unit of what we want be multilplying to pixelScale  
+                glm::vec2 glyphSize =
+                {
+                    (packedChar->x1 - packedChar->x0) * pixelscale * scale,
+                    (packedChar->y1 - packedChar->y0) * pixelscale * scale
+                };
+
+                glm::vec2 glyphBoundingBoxBottomLeft =
+                {
+                    localPosition.x + packedChar->xoff * pixelscale * scale,
+                    localPosition.y + (packedChar->yoff + fontSize) * pixelscale * scale
+                };
+                //
+                m_VertexBuffer[m_QuadCount * 4 + 0].pos = glm::vec3(glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y + glyphSize.y, 0.f);
+                m_VertexBuffer[m_QuadCount * 4 + 1].pos = glm::vec3(glyphBoundingBoxBottomLeft.x,               glyphBoundingBoxBottomLeft.y + glyphSize.y, 0.f);
+                m_VertexBuffer[m_QuadCount * 4 + 2].pos = glm::vec3(glyphBoundingBoxBottomLeft.x,               glyphBoundingBoxBottomLeft.y, 0.f);
+                m_VertexBuffer[m_QuadCount * 4 + 3].pos = glm::vec3(glyphBoundingBoxBottomLeft.x + glyphSize.x, glyphBoundingBoxBottomLeft.y, 0.f);
+
+                m_VertexBuffer[m_QuadCount * 4 + 0].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t1);
+                m_VertexBuffer[m_QuadCount * 4 + 1].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t1);
+                m_VertexBuffer[m_QuadCount * 4 + 2].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t0);
+                m_VertexBuffer[m_QuadCount * 4 + 3].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t0);
+
+                m_VertexBuffer[m_QuadCount * 4 + 0].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+                m_VertexBuffer[m_QuadCount * 4 + 1].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+                m_VertexBuffer[m_QuadCount * 4 + 2].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+                m_VertexBuffer[m_QuadCount * 4 + 3].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+
+                ++m_QuadCount;
+
+                // Update the position to render the next glyph specified by packedChar->xadvance.
+                localPosition.x += packedChar->xadvance * pixelscale * scale;
+            }
+            else if (ch == '\n')
+            {
+                // advance y by fontSize, reset x-coordinate
+                localPosition.y += fontSize * pixelscale * scale;
+                localPosition.x = position.x;
+            }
+            else if (ch == '\t')
+            {
+                localPosition.x = (floor(localPosition.x / (fontSize * pixelscale * scale * 4.f)) + 1.f) * (fontSize * pixelscale * scale * 4.f);
+            }
+        }
     }
 
     void Graphics::DestroySwapchain(vk::SwapchainKHR swapchain)

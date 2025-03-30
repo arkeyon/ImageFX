@@ -5,6 +5,8 @@
 #include <fstream>
 #include <GLFW/glfw3.h>
 
+#include <vk_mem_alloc.hpp>
+
 namespace saf {
 
 	namespace vkhelper {
@@ -81,17 +83,17 @@ namespace saf {
         }
 
         [[nodiscard]] vk::Pipeline CreateGraphicsPipeline(
-            vk::Device       device,
+            vk::Device                                                device,
             vk::PipelineCache                                         pipeline_cache,
-            std::vector<vk::PipelineShaderStageCreateInfo> const& shader_stages,
-            vk::PipelineVertexInputStateCreateInfo const& vertex_input_state,
+            std::vector<vk::PipelineShaderStageCreateInfo> const&     shader_stages,
+            vk::PipelineVertexInputStateCreateInfo const&             vertex_input_state,
             vk::PrimitiveTopology                                     primitive_topology,
             uint32_t                                                  patch_control_points,
             vk::PolygonMode                                           polygon_mode,
             vk::CullModeFlags                                         cull_mode,
             vk::FrontFace                                             front_face,
             std::vector<vk::PipelineColorBlendAttachmentState> const& blend_attachment_states,
-            vk::PipelineDepthStencilStateCreateInfo const& depth_stencil_state,
+            vk::PipelineDepthStencilStateCreateInfo const&            depth_stencil_state,
             vk::PipelineLayout                                        pipeline_layout,
             vk::Format                                                swapchain_format)
         {
@@ -334,7 +336,7 @@ namespace saf {
             return physical_device;
         }
 
-        [[nodiscard]] vk::Device CreateLogicalDevice(vk::Instance instance, vk::PhysicalDevice physical_device, uint32_t graphics_queue_family, std::vector<const char*> layers = {}, std::vector<const char*> extensions = {})
+        [[nodiscard]] inline vk::Device CreateLogicalDevice(vk::Instance instance, vk::PhysicalDevice physical_device, uint32_t graphics_queue_family, std::vector<const char*> layers = {}, std::vector<const char*> extensions = {})
         {
 
             const float queue_priority = 1.f;
@@ -398,32 +400,135 @@ namespace saf {
             device.destroyCommandPool(command_pool);
         }
 
-        vk::Buffer create_buffer(uint32_t size, vk::BufferUsageFlags buffer_usage, vk::SharingMode sharing_mode, VmaMemoryUsage memory_usage, VmaAllocationCreateFlags memory_flags, VmaAllocator allocator, VmaAllocation& allocation)
+        [[nodiscard]] inline vk::Buffer create_buffer(uint32_t size, vk::BufferUsageFlags buffer_usage, vk::SharingMode sharing_mode, vma::MemoryUsage memory_usage, vma::AllocationCreateFlags memory_flags, vma::Allocator allocator, vma::Allocation& allocation)
         {
-            VkBufferCreateInfo bufferInfo = {};
-            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            bufferInfo.size = size;
-            bufferInfo.usage = static_cast<VkBufferUsageFlags>(buffer_usage);
-            bufferInfo.sharingMode = static_cast<VkSharingMode>(sharing_mode);
+            const vk::BufferCreateInfo bufferInfo({}, size, buffer_usage, sharing_mode);
 
-            VmaAllocationCreateInfo allocInfo = {};
+            vma::AllocationCreateInfo allocInfo = {};
             allocInfo.usage = memory_usage;
             allocInfo.flags = memory_flags;
 
             vk::Buffer buffer;
 
-            ERR_GUARD_VULKAN(vmaCreateBuffer(
-                allocator,
+            if (allocator.createBuffer(
                 &bufferInfo,
                 &allocInfo,
-                reinterpret_cast<VkBuffer*>(&buffer),
+                &buffer,
                 &allocation,
                 nullptr
-            ));
+            ) != vk::Result::eSuccess)
+                IFX_ERROR("Failed to create buffer");
 
             return buffer;
         }
 
+        [[nodiscard]] vk::Image CreateImage(vk::Device device, uint32_t queue_index, vma::Allocator allocator, uint32_t width, uint32_t height, uint32_t depth, uint8_t* rawimagedata, vma::Allocation& image_allocation)
+        {
+            vk::ImageCreateInfo image_create_info(
+                {},
+                vk::ImageType::e2D,
+                {},
+                vk::Extent3D(width, height, 1),
+                1,
+                1,
+                vk::SampleCountFlagBits::e1,
+                vk::ImageTiling::eOptimal,
+                vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+                vk::SharingMode::eExclusive,
+                {},
+                {},
+                vk::ImageLayout::eUndefined
+            );
+
+            switch (depth)
+            {
+            case 1: image_create_info.format = vk::Format::eR8Unorm; break;
+            case 2: image_create_info.format = vk::Format::eR8G8Unorm; break;
+            case 3: image_create_info.format = vk::Format::eR8G8B8Unorm; break;
+            case 4: image_create_info.format = vk::Format::eR8G8B8A8Unorm; break;
+            default: IFX_ERROR("Unsupported image depth"); break;
+            }
+
+            vma::AllocationCreateInfo alloc_create_info{};
+            vk::Image image;
+
+            alloc_create_info.flags = vma::AllocationCreateFlagBits::eDedicatedMemory;
+            alloc_create_info.usage = vma::MemoryUsage::eGpuOnly;
+
+            if (allocator.createImage(&image_create_info, &alloc_create_info, &image, &image_allocation, nullptr) != vk::Result::eSuccess)
+                IFX_ERROR("Failed to create image");
+
+            uint8_t* imagedata;
+
+            vma::Allocation staging_allocation;
+            vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
+
+            ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
+            memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * depth);
+            vmaUnmapMemory(allocator, staging_allocation);
+
+            vkhelper::immediate_submit(device, queue_index, [width, height, stageing_buffer, image](vk::CommandBuffer cmd)
+                {
+                    vk::ImageMemoryBarrier image_memory_barrier_pre(
+                        vk::AccessFlagBits::eNone,
+                        vk::AccessFlagBits::eTransferWrite,
+                        vk::ImageLayout::eUndefined,
+                        vk::ImageLayout::eTransferDstOptimal,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        image,
+                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                    );
+
+                    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
+
+                    vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
+
+                    cmd.copyBufferToImage(stageing_buffer, image, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
+
+                    vk::ImageMemoryBarrier image_memory_barrier_post(
+                        vk::AccessFlagBits::eTransferWrite,
+                        vk::AccessFlagBits::eShaderRead,
+                        vk::ImageLayout::eTransferDstOptimal,
+                        vk::ImageLayout::eShaderReadOnlyOptimal,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        VK_QUEUE_FAMILY_IGNORED,
+                        image,
+                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                    );
+
+                    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
+                });
+
+            allocator.destroyBuffer(stageing_buffer, staging_allocation);
+            
+            return image;
+        }
+
+        [[nodiscard]] inline vk::Sampler CreateFontSampler(vk::Device device)
+        {
+            vk::SamplerCreateInfo sampler_create_info{};
+            sampler_create_info.addressModeU = vk::SamplerAddressMode::eRepeat;
+            sampler_create_info.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+            sampler_create_info.addressModeW = vk::SamplerAddressMode::eClampToEdge;
+
+            sampler_create_info.maxLod = 0;
+            sampler_create_info.minLod = 0;
+            sampler_create_info.mipLodBias = 0.f;
+            sampler_create_info.mipmapMode = vk::SamplerMipmapMode::eLinear;
+
+            sampler_create_info.compareEnable = vk::False;
+            sampler_create_info.compareOp = vk::CompareOp::eAlways;
+
+            sampler_create_info.minFilter = vk::Filter::eNearest;
+            sampler_create_info.magFilter = vk::Filter::eLinear;
+            sampler_create_info.anisotropyEnable = vk::True;
+            sampler_create_info.maxAnisotropy = 1.f;
+            sampler_create_info.unnormalizedCoordinates = vk::False;
+            sampler_create_info.borderColor = vk::BorderColor::eFloatTransparentBlack;
+
+            return device.createSampler(sampler_create_info);
+        }
 	}
 
 }

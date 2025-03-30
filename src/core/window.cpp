@@ -18,7 +18,7 @@ namespace saf {
         : m_Width(width), m_Height(height), m_Title(title)
     {
         m_Graphics = std::make_unique<Graphics>();
-
+        str = "Test";
     }
 
     Window::~Window()
@@ -52,6 +52,7 @@ namespace saf {
 
     void Window::InitGLFW()
     {
+
         glfwSetErrorCallback([](int error_code, const char* description)
             {
                 IFX_ERROR(description);
@@ -78,9 +79,34 @@ namespace saf {
             IFX_ERROR("GLFW failed to create window");
         }
 
+        glfwSetWindowUserPointer(m_glfwWindow, static_cast<void*>(this));
+
+        glfwSetCharCallback(m_glfwWindow, [](GLFWwindow* window, unsigned int codepoint)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+                if (mywindow)
+                {
+                    char c = static_cast<char>(codepoint);
+                    mywindow->str += c;
+                }
+            });
+
         glfwSetKeyCallback(m_glfwWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
             {
-                if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(window, GLFW_TRUE);
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                if (action == GLFW_PRESS || action == GLFW_REPEAT)
+                {
+                    if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(window, GLFW_TRUE);
+                    else if (key == GLFW_KEY_BACKSPACE)
+                    {
+                        mywindow->str = mywindow->str.substr(0, mywindow->str.length() - 1);
+                    }
+                    else if (key == GLFW_KEY_ENTER)
+                    {
+                        mywindow->str += '\n';
+                    }
+                }
             });
 
         glfwSetWindowCloseCallback(m_glfwWindow, [](GLFWwindow* window)
@@ -130,11 +156,10 @@ namespace saf {
 
         ImGui::Begin("Debug");
         ImGui::Text("FPS: %d", fps);
-
-        ImGui::SliderFloat3("Color Slider", &m_Graphics->color.x, 0.f, 1.f);
-
         ImGui::End();
 
+        m_Graphics->ResetVertexBuffer();
+        m_Graphics->DrawString(str, glm::vec3(-1.f, -1.f, 0.f), 0.5f);
         
         if (m_Graphics->Render()) fps = printFPS();
     }
