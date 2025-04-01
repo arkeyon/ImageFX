@@ -64,11 +64,11 @@ add_library(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_include_directories(${PROJECT_NAME} PUBLIC dependencies/spdlog/include)
 target_include_directories(${PROJECT_NAME} PUBLIC dependencies/glfw/include)
-target_include_directories(${PROJECT_NAME} PRIVATE dependencies/stb)
+target_include_directories(${PROJECT_NAME} PUBLIC dependencies/stb)
 target_include_directories(${PROJECT_NAME} PRIVATE dependencies)
-target_include_directories(${PROJECT_NAME} PRIVATE dependencies/VulkanMemoryAllocator/include)
-target_include_directories(${PROJECT_NAME} PRIVATE ${IMGUI_PATH})
-target_include_directories(${PROJECT_NAME} PRIVATE dependencies/VulkanMemoryAllocator-Hpp/include)
+target_include_directories(${PROJECT_NAME} PUBLIC dependencies/VulkanMemoryAllocator/include)
+target_include_directories(${PROJECT_NAME} PUBLIC ${IMGUI_PATH})
+target_include_directories(${PROJECT_NAME} PUBLIC dependencies/VulkanMemoryAllocator-Hpp/include)
 
 target_precompile_headers(${PROJECT_NAME} PRIVATE src/safpch.h)
 
