@@ -46,7 +46,7 @@ target_include_directories(imgui PUBLIC dependencies/glfw/include)
 target_link_libraries(imgui PRIVATE Vulkan::Vulkan)
 target_link_libraries(imgui PRIVATE glfw)
 
-add_executable(${PROJECT_NAME}
+add_library(${PROJECT_NAME}
 	src/main.cpp
 	src/core/entrypoint.cpp
 	src/core/application.cpp src/core/application.h
