@@ -11,7 +11,7 @@ namespace saf {
 
 	namespace vkhelper {
 
-        [[nodiscard]] uint32_t FindQueueFamily(vk::Instance instance, vk::PhysicalDevice physical_device, vk::QueueFlags flags, vk::SurfaceKHR surface)
+        [[nodiscard]] inline uint32_t FindQueueFamily(vk::Instance instance, vk::PhysicalDevice physical_device, vk::QueueFlags flags, vk::SurfaceKHR surface)
         {
             IFX_TRACE("Window FindQueueFamily");
             if (!physical_device)
@@ -82,7 +82,7 @@ namespace saf {
             return UINT32_MAX;
         }
 
-        [[nodiscard]] vk::Pipeline CreateGraphicsPipeline(
+        [[nodiscard]] inline vk::Pipeline CreateGraphicsPipeline(
             vk::Device                                                device,
             vk::PipelineCache                                         pipeline_cache,
             std::vector<vk::PipelineShaderStageCreateInfo> const&     shader_stages,
@@ -145,7 +145,7 @@ namespace saf {
             return pipeline;
         }
 
-        [[nodiscard]] vk::ShaderModule CreateShaderModule(vk::Device device, std::string path)
+        [[nodiscard]] inline vk::ShaderModule CreateShaderModule(vk::Device device, std::string path)
         {
             static const std::map<std::string, shaderc_shader_kind> shader_stage_map = { {"comp", shaderc_shader_kind::shaderc_compute_shader},
                                                                                             {"frag", shaderc_shader_kind::shaderc_fragment_shader},
@@ -193,7 +193,7 @@ namespace saf {
             return device.createShaderModule(shader_module_create_info);
         }
 
-        [[nodiscard]] vk::Instance CreateInstance(const std::vector<const char*>& extensions, const std::vector<const char*>& layers)
+        [[nodiscard]] inline vk::Instance CreateInstance(const std::vector<const char*>& extensions, const std::vector<const char*>& layers)
         {
             IFX_TRACE("Window CreateInstance");
 
@@ -268,7 +268,7 @@ namespace saf {
             return instance;
         }
 
-        [[nodiscard]] vk::DebugUtilsMessengerEXT CreateDebugMessenger(vk::Instance instance)
+        [[nodiscard]] inline vk::DebugUtilsMessengerEXT CreateDebugMessenger(vk::Instance instance)
         {
             IFX_TRACE("Window CreateDebugMessenger");
             vk::DebugUtilsMessengerCreateInfoEXT messengercreateinfo({}, vk::FlagTraits<vk::DebugUtilsMessageSeverityFlagBitsEXT>::allFlags, vk::FlagTraits<vk::DebugUtilsMessageTypeFlagBitsEXT>::allFlags,
@@ -293,7 +293,7 @@ namespace saf {
             return messager;
         }
 
-        [[nodiscard]] vk::PhysicalDevice SelectPhysicalDevice(vk::Instance instance)
+        [[nodiscard]] inline vk::PhysicalDevice SelectPhysicalDevice(vk::Instance instance)
         {
             std::vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
             if (devices.empty()) IFX_ERROR("Vulkan didnt find any physical devices");
@@ -370,7 +370,7 @@ namespace saf {
             return device;
         }
 
-        void immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
+        inline void immediate_submit(vk::Device device, uint32_t queue_index, std::function<void(vk::CommandBuffer cmd)> func)
         {
             vk::FenceCreateInfo fence_create_info(vk::FenceCreateFlagBits::eSignaled);
             vk::Fence fence = device.createFence(fence_create_info);
@@ -422,7 +422,7 @@ namespace saf {
             return buffer;
         }
 
-        [[nodiscard]] vk::Image CreateImage(vk::Device device, uint32_t queue_index, vma::Allocator allocator, uint32_t width, uint32_t height, uint32_t depth, uint8_t* rawimagedata, vma::Allocation& image_allocation)
+        [[nodiscard]] inline vk::Image CreateImage(vk::Device device, uint32_t queue_index, vma::Allocator allocator, uint32_t width, uint32_t height, uint32_t depth, uint8_t* rawimagedata, vma::Allocation& image_allocation)
         {
             vk::ImageCreateInfo image_create_info(
                 {},

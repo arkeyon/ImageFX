@@ -23,10 +23,11 @@ namespace saf {
         void Init();
         virtual void Run();
         virtual void Update() =0;
+
+        std::shared_ptr<Window> m_Window;
+        std::shared_ptr<Renderer2D> m_Renderer2D;
     private:
         nlohmann::json m_RunArgs;
-        std::unique_ptr<Window> m_Window;
-
     };
 
 }

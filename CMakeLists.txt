@@ -59,7 +59,7 @@ add_executable(${PROJECT_NAME}
 	src/render/shader.cpp src/render/shader.h
 	src/core/definitions.cpp src/core/definitions.h
 	src/utils/vmaimpl.cpp
- "src/render/renderer2d.cpp" "src/render/renderer2d.h")
+ "src/render/renderer2d.cpp" "src/render/renderer2d.h" "src/globals.h" "src/globals.cpp"  )
 
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_include_directories(${PROJECT_NAME} PUBLIC dependencies/spdlog/include)
