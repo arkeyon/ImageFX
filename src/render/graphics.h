@@ -1,6 +1,6 @@
 
 
-#include "glm/glm/fwd.hpp"
+#include <glm/fwd.hpp>
 #include <array>
 #include <vector>
 #include <vulkan/vulkan.hpp>
@@ -11,7 +11,7 @@
 #include <vulkan/vulkan_structs.hpp>
 
 #include <GLFW/glfw3.h>
-#include <glm/glm/glm.hpp>
+#include <glm/glm.hpp>
 #include <shaderc/shaderc.h>
 #include <vk_mem_alloc.hpp>
 

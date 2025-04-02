@@ -3,7 +3,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "json/single_include/nlohmann/json.hpp"
+#include "nlohmann/json.hpp"
 
 #include "utils/argumentmanager.h"
 #include "core/window.h"
