@@ -10,6 +10,7 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include "render/graphics.h"
 #include "globals.h"
 #include "platform/vulkangraphics.h"
 
@@ -304,6 +305,11 @@ namespace saf {
         ImGui::End();
 
         if (m_FrameManager->Render(global::g_Renderer2D)) fps = printFPS();
+    }
+
+    bool Window::ShouldClose() const
+    {
+        return glfwWindowShouldClose(m_glfwWindow);
     }
 
 }

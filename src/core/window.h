@@ -1,23 +1,7 @@
 #pragma once
 
-#include <vector>
-
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_core.h>
-#include <vulkan/vulkan_enums.hpp>
-#include <vulkan/vulkan_funcs.hpp>
-#include <vulkan/vulkan_handles.hpp>
-#include <vulkan/vulkan_structs.hpp>
-
-#include <shaderc/shaderc.h>
-
-#include <fstream>
-#include <map>
-
-#include <GLFW/glfw3.h>
-
-#include "render/graphics.h"
 #include "render/renderer2d.h"
+#include "GLFW/glfw3.h"
 
 namespace saf {
 
@@ -34,7 +18,7 @@ namespace saf {
     - create shader pipeline
     */
 
-    
+    class FrameManager;
 
     class Window
     {
@@ -51,7 +35,7 @@ namespace saf {
         void Init();
         void Update();
 
-        inline bool ShouldClose() const { return glfwWindowShouldClose(m_glfwWindow); }
+        bool ShouldClose() const;
         inline uint32_t GetWidth() const { return m_Width; }
         inline uint32_t GetHeight() const { return m_Height; }
         inline const char* GetTitle() const { return m_Title; }

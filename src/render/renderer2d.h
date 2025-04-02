@@ -4,8 +4,7 @@
 
 #include <vk_mem_alloc.hpp>
 #include <vulkan/vulkan.hpp>
-#include <glm/glm/glm.hpp>
-
+#include <glm/glm.hpp>
 #include <stb_truetype.h>
 
 namespace saf {
