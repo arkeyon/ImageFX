@@ -10,8 +10,14 @@ namespace saf {
         : m_RunArgs(args)
     {
         m_Window = std::make_shared<Window>(1024, 768, "Example");
+
         m_Renderer2D = std::make_shared<Renderer2D>(1024, 768);
         global::g_Renderer2D = m_Renderer2D;
+    }
+
+    Application::~Application()
+    {
+        m_Renderer2D->Shutdown();
     }
 
     void Application::Init()

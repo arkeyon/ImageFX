@@ -7,6 +7,10 @@
 #include "utils/argumentmanager.h"
 #include "core/window.h"
 
+#include "input/event.h"
+
+#define BIND_EVENT_FN(x) std::bind(&x, this, std::placeholders::_1)
+
 namespace saf {
 
     class Application
@@ -17,7 +21,7 @@ namespace saf {
         Application(Application&&) = delete;
         Application& operator=(const Application&) = delete;
         Application& operator=(Application&&) = delete;
-        virtual ~Application() = default;
+        virtual ~Application();
 
         void Init();
         virtual void Run();

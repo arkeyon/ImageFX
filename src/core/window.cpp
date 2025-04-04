@@ -14,15 +14,20 @@
 #include "globals.h"
 #include "platform/vulkangraphics.h"
 
+#include "input/event.h"
+#include "input/application_event.h"
+#include "input/key_event.h"
+#include "input/mouse_event.h"
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 namespace saf {
 
     Window::Window(uint32_t width, uint32_t height, const char* title)
-        : m_Width(width), m_Height(height), m_Title(title)
+        : m_Width(width), m_Height(height), m_Title(title), m_CursorState(true), m_CursorStateChange(true)
     {
-        m_FrameManager = std::make_unique<FrameManager>(m_Width, m_Height);
-        str = "Test";
+
+        m_FrameManager = std::make_unique<FrameManager>(width, height);
     }
 
     Window::~Window()
@@ -80,7 +85,7 @@ namespace saf {
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        m_glfwWindow = glfwCreateWindow(m_Width, m_Height, m_Title, nullptr, nullptr);
+        m_glfwWindow = glfwCreateWindow(m_Width, m_Height, m_Title.c_str(), nullptr, nullptr);
 
         if (!m_glfwWindow)
         {
@@ -89,46 +94,113 @@ namespace saf {
 
         glfwSetWindowUserPointer(m_glfwWindow, static_cast<void*>(this));
 
-        glfwSetCharCallback(m_glfwWindow, [](GLFWwindow* window, unsigned int codepoint)
-            {
-                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
-                if (mywindow)
-                {
-                    char c = static_cast<char>(codepoint);
-                    mywindow->str += c;
-                }
-            });
-
-        glfwSetKeyCallback(m_glfwWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
-            {
-                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
-
-                if (action == GLFW_PRESS || action == GLFW_REPEAT)
-                {
-                    if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(window, GLFW_TRUE);
-                    else if (key == GLFW_KEY_BACKSPACE)
-                    {
-                        mywindow->str = mywindow->str.substr(0, mywindow->str.length() - 1);
-                    }
-                    else if (key == GLFW_KEY_ENTER)
-                    {
-                        mywindow->str += '\n';
-                    }
-                }
-            });
-
-        glfwSetWindowCloseCallback(m_glfwWindow, [](GLFWwindow* window)
-            {
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
-            });
-
         glfwSetWindowSizeCallback(m_glfwWindow, [](GLFWwindow* window, int width, int height)
             {
                 Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
                 mywindow->m_Width = width;
                 mywindow->m_Height = height;
                 mywindow->m_FrameManager->Resize(width, height);
+
+                WindowResizeEvent e(width, height);
+                mywindow->m_EventCallback(e);
             });
+
+        glfwSetWindowCloseCallback(m_glfwWindow, [](GLFWwindow* window)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                WindowCloseEvent e;
+                mywindow->m_EventCallback(e);
+
+                glfwSetWindowShouldClose(mywindow->m_glfwWindow, GLFW_TRUE);
+            });
+
+        glfwSetKeyCallback(m_glfwWindow, [](GLFWwindow* window, int key, int scancode, int action, int mods)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+                if (action == GLFW_RELEASE)
+                {
+                    KeyReleasedEvent e(key);
+                    mywindow->m_EventCallback(e);
+                }
+                else if (action == GLFW_PRESS)
+                {
+                    KeyPressedEvent e(key);
+                    mywindow->m_EventCallback(e);
+                }
+                else // action == GLFW_REPEAT
+                {
+                    KeyRepeatedEvent e(key);
+                    mywindow->m_EventCallback(e);
+                }
+            });
+
+        glfwSetCharCallback(m_glfwWindow, [](GLFWwindow* window, unsigned int key)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                KeyTypedEvent e(key);
+                mywindow->m_EventCallback(e);
+            });
+
+        glfwSetMouseButtonCallback(m_glfwWindow, [](GLFWwindow* window, int button, int action, int mods)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+                if (action == GLFW_RELEASE)
+                {
+                    MouseButtonReleasedEvent e(button);
+                    mywindow->m_EventCallback(e);
+                }
+                else // action == GLFW_PRESS
+                {
+                    MouseButtonPressedEvent e(button);
+                    mywindow->m_EventCallback(e);
+                }
+            });
+
+        glfwSetScrollCallback(m_glfwWindow, [](GLFWwindow* window, double xoffset, double yoffset)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                MouseScrolledEvent e((float)(xoffset), (float)(yoffset));
+                mywindow->m_EventCallback(e);
+
+            });
+
+        glfwSetCursorPosCallback(m_glfwWindow, [](GLFWwindow* window, double xpos, double ypos)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                static float x = 0.f, y = 0.f;
+
+                if (mywindow->m_CursorStateChange)
+                {
+                    mywindow->m_CursorStateChange = false;
+                    MouseMovedEvent e((float)(xpos), (float)(ypos), 0.f, 0.f);
+                    mywindow->m_EventCallback(e);
+                }
+                else
+                {
+                    MouseMovedEvent e((float)(xpos), (float)(ypos), (float)(xpos)-x, (float)(ypos)-y);
+                    mywindow->m_EventCallback(e);
+                }
+
+                x = (float)xpos;
+                y = (float)ypos;
+            });
+
+        glfwSetWindowPosCallback(m_glfwWindow, [](GLFWwindow* window, int xpos, int ypos)
+            {
+                Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
+
+                WindowMovedEvent e(xpos, ypos);
+                mywindow->m_EventCallback(e);
+            });
+
+        if (glfwRawMouseMotionSupported()) glfwSetInputMode(m_glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+        else IFX_TRACE("Raw input not supported");
+
+        //glfwSetErrorCallback();
     }
 
     void Window::InitVulkan()
@@ -214,17 +286,17 @@ namespace saf {
 
             std::array<vk::DescriptorPoolSize, 11> pool_sizes =
             {
-                vk::DescriptorPoolSize(vk::DescriptorType::eSampler, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eSampledImage, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eUniformTexelBuffer, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eStorageTexelBuffer, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBufferDynamic, 1000),
-                vk::DescriptorPoolSize(vk::DescriptorType::eInputAttachment, 1000)
+                vk::DescriptorPoolSize(vk::DescriptorType::eSampler, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eSampledImage, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eUniformTexelBuffer, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageTexelBuffer, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eUniformBufferDynamic, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eStorageBufferDynamic, 100),
+                vk::DescriptorPoolSize(vk::DescriptorType::eInputAttachment, 100)
             };
 
             vk::DescriptorPoolCreateInfo pool_create_info{};

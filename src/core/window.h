@@ -3,6 +3,8 @@
 #include "render/renderer2d.h"
 #include "GLFW/glfw3.h"
 
+#include "input/event.h"
+
 namespace saf {
 
     /*
@@ -38,20 +40,24 @@ namespace saf {
         bool ShouldClose() const;
         inline uint32_t GetWidth() const { return m_Width; }
         inline uint32_t GetHeight() const { return m_Height; }
-        inline const char* GetTitle() const { return m_Title; }
+        inline std::string GetTitle() const { return m_Title; }
+        
+        using EventCallbackFn = std::function<void(Event&)>;
+        inline void SetEventCallback(EventCallbackFn callback) { m_EventCallback = callback;}
 
-        std::string str;
     private:
         void InitGLFW();
         void InitVulkan();
         void ShutdownVulkan();
 
-        uint32_t m_Width, m_Height;
-        const char* m_Title;
-
         GLFWwindow* m_glfwWindow = nullptr;
         std::unique_ptr<FrameManager> m_FrameManager;
 
+        std::string m_Title;
+        unsigned int m_Width, m_Height;
+        EventCallbackFn m_EventCallback;
+        bool m_CursorState;
+        bool m_CursorStateChange;
     };
 
 }

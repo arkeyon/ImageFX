@@ -53,15 +53,16 @@ add_library(${PROJECT_NAME}
 	${PROJECT_SOURCE_DIR}/src/utils/stbimpl.cpp
 	${PROJECT_SOURCE_DIR}/src/utils/vmaimpl.cpp
 	${PROJECT_SOURCE_DIR}/src/core/entrypoint.cpp
+	${PROJECT_SOURCE_DIR}/src/core/window.cpp				${PROJECT_SOURCE_DIR}/src/core/window.h
+	${PROJECT_SOURCE_DIR}/src/core/definitions.cpp			${PROJECT_SOURCE_DIR}/src/core/definitions.h
 	${PROJECT_SOURCE_DIR}/src/core/application.cpp			${PROJECT_SOURCE_DIR}/src/core/application.h
+	${PROJECT_SOURCE_DIR}/src/core/input.cpp				${PROJECT_SOURCE_DIR}/src/core/input.h
+	${PROJECT_SOURCE_DIR}/src/render/graphics.cpp			${PROJECT_SOURCE_DIR}/src/render/graphics.h
+	${PROJECT_SOURCE_DIR}/src/render/renderer2d.cpp			${PROJECT_SOURCE_DIR}/src/render/renderer2d.h
+	${PROJECT_SOURCE_DIR}/src/render/shader.cpp				${PROJECT_SOURCE_DIR}/src/render/shader.h
 	${PROJECT_SOURCE_DIR}/src/utils/argumentmanager.cpp		${PROJECT_SOURCE_DIR}/src/utils/argumentmanager.h
 	${PROJECT_SOURCE_DIR}/src/utils/log.cpp					${PROJECT_SOURCE_DIR}/src/utils/log.h
-	${PROJECT_SOURCE_DIR}/src/core/window.cpp				${PROJECT_SOURCE_DIR}/src/core/window.h
-	${PROJECT_SOURCE_DIR}/src/render/graphics.cpp			${PROJECT_SOURCE_DIR}/src/render/graphics.h
 	${PROJECT_SOURCE_DIR}/src/platform/vulkangraphics.cpp	${PROJECT_SOURCE_DIR}/src/platform/vulkangraphics.h
-	${PROJECT_SOURCE_DIR}/src/render/shader.cpp				${PROJECT_SOURCE_DIR}/src/render/shader.h
-	${PROJECT_SOURCE_DIR}/src/core/definitions.cpp			${PROJECT_SOURCE_DIR}/src/core/definitions.h
-	${PROJECT_SOURCE_DIR}/src/render/renderer2d.cpp			${PROJECT_SOURCE_DIR}/src/render/renderer2d.h
 	${PROJECT_SOURCE_DIR}/src/globals.cpp					${PROJECT_SOURCE_DIR}/src/globals.h
 )
 
