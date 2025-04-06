@@ -16,21 +16,38 @@ namespace saf {
     class Application
     {
     public:
-        Application(const nlohmann::json& args);
+        Application(const nlohmann::json& args, std::string title);
         Application(const Application&) = delete;
         Application(Application&&) = delete;
         Application& operator=(const Application&) = delete;
         Application& operator=(Application&&) = delete;
         virtual ~Application();
 
-        void Init();
+        virtual void Init();
         virtual void Run();
-        virtual void Update() =0;
+        virtual void Update() = 0;
+    private:
+        nlohmann::json m_RunArgs;
+
+        bool m_Running = true;
+    };
+
+    class GraphicsApplication : public Application
+    {
+    public:
+        GraphicsApplication(const nlohmann::json& args, std::string title);
+        GraphicsApplication(const GraphicsApplication&) = delete;
+        GraphicsApplication(GraphicsApplication&&) = delete;
+        GraphicsApplication& operator=(const GraphicsApplication&) = delete;
+        GraphicsApplication& operator=(GraphicsApplication&&) = delete;
+        virtual ~GraphicsApplication();
+
+        virtual void Init() override;
+        virtual void Run() override;
+        virtual void Update() = 0;
 
         std::shared_ptr<Window> m_Window;
         std::shared_ptr<Renderer2D> m_Renderer2D;
-    private:
-        nlohmann::json m_RunArgs;
     };
 
 }

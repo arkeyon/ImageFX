@@ -7,6 +7,8 @@
 #include <glm/glm.hpp>
 #include <stb_truetype.h>
 
+#include <deque>
+
 #define BIT(x) (1U << x)
 
 namespace saf {
@@ -64,7 +66,7 @@ namespace saf {
 		Font(FontType _fonttype = FontType::Arial, float _scale = 1.f, glm::vec4 _color = glm::vec4(1.f, 1.f, 1.f, 1.f));
 
 		void EnableCharRotate(float _char_rotate_angle);
-		void EnableTranslate(glm::vec2 _translation);
+		void EnableTranslate(glm::vec3 _translation);
 		void EnableRotate(float _rotate_angle);
 		void EnableFade(float _fade);
 		void EnableScale(float _scale);
@@ -73,19 +75,95 @@ namespace saf {
 		float scale = 1.f;
 		float rotate_angle = 0.f;
 		float char_rotate_angle = 0.f;
-		glm::vec2 translation = glm::vec2(0.f, 0.f);
+		glm::vec3 translation = glm::vec3(0.f, 0.f, 0.f);
 
 		FontType fonttype = FontType::Arial;
 		glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	};
 
-	struct StringAsset
+
+	struct GraphicalString
 	{
-		struct CharAsset
+		struct GraphicalChar
 		{
+			GraphicalChar(char _code, Font _font = {})
+				: code(_code), font(_font)
+			{
+
+			}
 			char code;
 			Font font;
 		};
+
+		GraphicalString(std::string str)
+		{
+			m_GChars.reserve(str.length());
+			for (char ch : str)
+			{
+				m_GChars.push_back(ch);
+			}
+		}
+
+		inline size_t Length() const { return m_GChars.size(); }
+
+		std::string ToString()
+		{
+			std::string str = "";
+			for (GraphicalChar ch : m_GChars)
+			{
+				str += ch.code;
+			}
+			return str;
+		}
+
+		const GraphicalChar& operator[](uint32_t index) const
+		{
+			return m_GChars[index];
+		}
+
+		std::vector<GraphicalChar> m_GChars;
+	};
+
+
+	class StringAnimator
+	{
+	public:
+		virtual GraphicalString Get(std::string input, float delta) = 0;
+		inline virtual bool ShouldDelete(float delta) { return false; }
+	};
+
+	class FadeawayString : public StringAnimator
+	{
+	public:
+		FadeawayString(FontType fonttype, float scale, glm::vec4 color, float fadetime, glm::vec3 fadedir)
+			: m_FadeTime(fadetime), m_FadeDir(fadedir)
+		{
+			m_BaseFont = Font(fonttype, scale, color);
+		}
+
+		virtual bool ShouldDelete(float delta)
+		{
+			return delta > m_FadeTime;
+		}
+
+		virtual GraphicalString Get(std::string input, float delta) override
+		{
+			GraphicalString string(input);
+			for (int i = 0; i < input.length(); ++i)
+			{
+				Font font = m_BaseFont;
+				font.EnableTranslate(m_FadeDir * delta / m_FadeTime);
+				font.EnableFade(delta / m_FadeTime);
+
+				string.m_GChars[i].code = input[i];
+				string.m_GChars[i].font = font;
+			}
+			return string;
+		}
+	private:
+		Font m_BaseFont = {};
+		float m_FadeTime;
+		glm::vec3 m_FadeDir;
 	};
 
 	class FontAtlas
@@ -149,7 +227,8 @@ namespace saf {
 		void Flush(vk::CommandBuffer cmd);
 		void EndScene();
 
-		glm::vec2 DrawString(std::string str, float scale, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, Font font = {}, int cursor = -1);
+		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
+		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
 
 	private:
 		uint32_t m_Width, m_Height;
@@ -172,6 +251,8 @@ namespace saf {
 		vk::Sampler m_vkFontAtlasSampler = nullptr;
 
 		std::shared_ptr<FontAtlas> m_FontAtlas;
+
+		friend class FrameManager;
 	};
 
 }

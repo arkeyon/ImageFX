@@ -6,8 +6,7 @@
 #include <fstream>
 #include "platform/vulkangraphics.h"
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/matrix_transform_2d.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "globals.h"
 #include <string>
@@ -25,7 +24,7 @@ namespace saf {
         char_rotate_angle = _char_rotate_angle;
     }
 
-    void Font::EnableTranslate(glm::vec2 _translation)
+    void Font::EnableTranslate(glm::vec3 _translation)
     {
         translation = _translation;
     }
@@ -332,8 +331,17 @@ namespace saf {
 
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkFontAtlasDescriptorSet }, {});
 
+        glm::mat4 projection = glm::mat3(1.f);
+        float left = 0.f, right = static_cast<float>(m_Width);
+        float top = 0.f, bottom = static_cast<float>(m_Height);
+
+        projection[0] = glm::vec4(2.f / (right - left), 0.f, 0.f, 0.f);
+        projection[1] = glm::vec4(0.f, 2.f / (bottom - top), 0.f, 0.f);
+        projection[2] = glm::vec4(0.f, 0.f, 1.f, 0.f);
+        projection[3] = glm::vec4(-(right + left) / (right - left), -(bottom + top) / (bottom - top), 0.f, 1.f);
+
         Uniform uniform{};
-        uniform.projection_view = glm::mat4(1.f);
+        uniform.projection_view = projection;
         uniform.model = glm::mat4(1.f);
         cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
 
@@ -347,19 +355,25 @@ namespace saf {
 
 	}
 
-    glm::vec2 Renderer2D::DrawString(std::string str, float scale, glm::vec2 bounding_first, glm::vec2 bounding_second, Font font, int cursor)
+    glm::vec2 Renderer2D::DrawString(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
     {
         glm::vec2 position(std::min(bounding_first.x, bounding_second.x), std::min(bounding_first.y, bounding_second.y));
 
-        float pixelscale = scale / static_cast<float>(m_Height);
-        uint32_t ifontid = static_cast<uint32_t>(font.fonttype);
-
         glm::vec2 cursor_pos = position;
         glm::vec2 localPosition = position;
-        int i = 0;
-        for (char ch : str)
+        float firstchar = position.x;
+        int lastspaceindex = 0;
+        int lastspacequadindex = m_QuadCount;
+
+        for (int i = 0; i < str.Length(); ++i)
         {
-            ++i;
+            char ch = str[i].code;
+            if (ch == '\0') return cursor_pos;
+
+            Font font = str[i].font;
+
+            uint32_t ifontid = static_cast<uint32_t>(font.fonttype);
+
             // Check if the charecter glyph is in the font atlas.
             if (ch >= m_FontAtlas->m_FirstCode && ch <= m_FontAtlas->m_FirstCode + m_FontAtlas->m_NumOfCodes)
             {
@@ -372,48 +386,54 @@ namespace saf {
                 // convert them to a unit of what we want be multilplying to pixelScale  
                 glm::vec2 glyphSize =
                 {
-                    (packedChar->x1 - packedChar->x0) * pixelscale * font.scale,
-                    (packedChar->y1 - packedChar->y0) * pixelscale * font.scale
+                    (packedChar->x1 - packedChar->x0) * font.scale,
+                    (packedChar->y1 - packedChar->y0) * font.scale
                 };
 
                 glm::vec2 glyphBoundingBoxBottomLeft =
                 {
-                        packedChar->xoff* pixelscale* font.scale,
-                        (packedChar->yoff + m_FontAtlas->m_FontSize)* pixelscale* font.scale
+                        packedChar->xoff * font.scale,
+                        (packedChar->yoff + m_FontAtlas->m_FontSize) * font.scale
                 };
-                //
 
-                if (localPosition.x + glyphBoundingBoxBottomLeft.x + glyphSize.x >= std::max(bounding_first.x, bounding_second.x))
+                float char_right = localPosition.x + glyphBoundingBoxBottomLeft.x + glyphSize.x;
+                float char_left = localPosition.x + glyphBoundingBoxBottomLeft.x;
+                if (char_right >= std::max(bounding_first.x, bounding_second.x))
                 {
-                    localPosition.y += m_FontAtlas->m_FontSize * pixelscale * font.scale;
-                    localPosition.x = position.x;
+                    float word_width = char_right - firstchar;
+                    float line_space = std::abs(bounding_second.x - bounding_first.x);
 
-                    glyphSize =
+                    if (word_width < line_space)
                     {
-                        (packedChar->x1 - packedChar->x0) * pixelscale * font.scale,
-                        (packedChar->y1 - packedChar->y0) * pixelscale * font.scale
-                    };
+                        localPosition.y += m_FontAtlas->m_FontSize * font.scale;
+                        localPosition.x = position.x;
+                        m_QuadCount = lastspacequadindex;
 
-                    glyphBoundingBoxBottomLeft =
+                        i = lastspaceindex;
+                        continue;
+                    }
+                    else
                     {
-                        packedChar->xoff * pixelscale * font.scale,
-                        (packedChar->yoff + m_FontAtlas->m_FontSize) * pixelscale * font.scale
-                    };
+                        localPosition.y += m_FontAtlas->m_FontSize * font.scale;
+                        localPosition.x = position.x;
+
+                        --i;
+                        continue;
+                    }
                 }
 
                 uint32_t vertex_offs = m_QuadCount * 4;
-                ++m_QuadCount;
 
-                glm::mat3 scale = glm::scale(glm::mat3(1.f), glm::vec2(font.scale, font.scale));
+                glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
 
-                glm::mat3 rotation = glm::rotate(glm::mat3(1.f), font.char_rotate_angle);
+                glm::mat4 rotation = glm::rotate(glm::mat4(1.f), font.char_rotate_angle, glm::vec3(0.f, 0.f, 1.f));
                 //glm::mat3 rotation = glm::mat3(1.f);
-                glm::mat3 translation = glm::translate(glm::mat3(1.f), glm::vec2(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f) + font.translation);
+                glm::mat4 translation = glm::translate(glm::mat4(1.f), glm::vec3(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f, 0.f) + font.translation);
 
-                m_VertexBuffer[vertex_offs + 0].pos = translation * rotation * scale * glm::vec3(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 1.f);
-                m_VertexBuffer[vertex_offs + 1].pos = translation * rotation * scale * glm::vec3(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 1.f);
-                m_VertexBuffer[vertex_offs + 2].pos = translation * rotation * scale * glm::vec3(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 1.f);
-                m_VertexBuffer[vertex_offs + 3].pos = translation * rotation * scale * glm::vec3(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 1.f);
+                m_VertexBuffer[vertex_offs + 0].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 1].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 2].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 3].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
 
                 m_VertexBuffer[vertex_offs + 0].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t1);
                 m_VertexBuffer[vertex_offs + 1].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t1);
@@ -434,27 +454,47 @@ namespace saf {
                 m_VertexBuffer[vertex_offs + 3].samplerid = fontz;
 
                 // Update the position to render the next glyph specified by packedChar->xadvance.
-                localPosition.x += packedChar->xadvance * pixelscale * font.scale;
+                localPosition.x += packedChar->xadvance * font.scale;
 
                 if (i == cursor)
                 {
                     cursor_pos = localPosition;
                 }
+
+                if (i > 0)
+                {
+                    char lastchar = str[i - 1].code;
+                    if (lastchar == ' ' || lastchar == '\t' || lastchar == '\n')
+                    {
+                        firstchar = char_left;
+                        lastspaceindex = i - 1;
+                        lastspacequadindex = m_QuadCount;
+                    }
+                }
+
+                ++m_QuadCount;
             }
             else if (ch == '\n')
             {
                 // advance y by fontSize, reset x-coordinate
-                localPosition.y += m_FontAtlas->m_FontSize * pixelscale * font.scale;
+                localPosition.y += m_FontAtlas->m_FontSize * font.scale;
                 localPosition.x = position.x;
             }
             else if (ch == '\t')
             {
-                localPosition.x = (floor(localPosition.x / (m_FontAtlas->m_FontSize * pixelscale * font.scale * 4.f)) + 1.f) * (m_FontAtlas->m_FontSize * pixelscale * font.scale * 4.f);
+                stbtt_packedchar* packedChar = &(m_FontAtlas->m_PackedChars[' ' - m_FontAtlas->m_FirstCode + m_FontAtlas->m_NumOfCodes * ifontid]);
+                float tabwidth = (packedChar->x1 - packedChar->x0) * font.scale * 4.f;
+                localPosition.x = (floor(localPosition.x / tabwidth) + 1.f) * (m_FontAtlas->m_FontSize * font.scale * 4.f);
             }
         }
 
         if (cursor == -1) return localPosition;
         return cursor_pos;
+    }
+
+    glm::vec2 Renderer2D::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
+    {
+        return DrawString(GraphicalString(str), bounding_first, bounding_second, cursor);
     }
 
 }

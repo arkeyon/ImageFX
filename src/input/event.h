@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <sstream>
 #include <functional>
 
 namespace saf {
@@ -13,6 +14,8 @@ namespace saf {
 		KeyPressed, KeyReleased, KeyRepeated, KeyTyped,
 		MouseButtonPressed, MouseButtonReleased, MouseButtonHeld, MouseMoved, MouseScrolled
 	};
+
+#define BIT(x) (1U << x)
 
 	enum EventCategory
 	{

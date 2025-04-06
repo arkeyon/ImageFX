@@ -68,5 +68,7 @@ namespace saf {
         SwapchainData m_vkSwapchainData{};
         std::vector<FrameData> m_vkFramesData{};
         std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
+
+        friend class Window;
     };
 }

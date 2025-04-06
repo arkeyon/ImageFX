@@ -6,21 +6,32 @@
 
 namespace saf {
 
-    Application::Application(const nlohmann::json& args)
+    Application::Application(const nlohmann::json& args, std::string title)
         : m_RunArgs(args)
     {
-        m_Window = std::make_shared<Window>(1024, 768, "Example");
+
+    }
+
+    Application::~Application()
+    {
+
+    }
+
+    GraphicsApplication::GraphicsApplication(const nlohmann::json& args, std::string title)
+        : Application(args, title)
+    {
+        m_Window = std::make_shared<Window>(1024, 768, title);
 
         m_Renderer2D = std::make_shared<Renderer2D>(1024, 768);
         global::g_Renderer2D = m_Renderer2D;
     }
 
-    Application::~Application()
+    GraphicsApplication::~GraphicsApplication()
     {
         m_Renderer2D->Shutdown();
     }
 
-    void Application::Init()
+    void GraphicsApplication::Init()
     {
         IFX_INFO("Application Init");
 
@@ -28,9 +39,14 @@ namespace saf {
         m_Renderer2D->Init();
     }
 
+    void Application::Init()
+    {
+
+    }
+
     const int maxfps = 60;
 
-    void Application::Run()
+    void GraphicsApplication::Run()
     {
         IFX_INFO("Application Run");
 
@@ -47,6 +63,17 @@ namespace saf {
 
             Update();
             m_Window->Update();
+        }
+
+    }
+
+    void Application::Run()
+    {
+        IFX_INFO("Application Run");
+
+        while (m_Running)
+        {
+            Update();
         }
 
     }

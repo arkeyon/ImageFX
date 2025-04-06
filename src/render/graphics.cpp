@@ -47,6 +47,8 @@ namespace saf {
         m_Width = width;
         m_Height = height;
         global::g_Device.waitIdle();
+        global::g_Renderer2D->m_Width = width;
+        global::g_Renderer2D->m_Height = height;
         CreateSwapchain();
     }
 

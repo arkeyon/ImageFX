@@ -26,7 +26,7 @@ namespace saf {
     {
     public:
 
-        Window(uint32_t width, uint32_t height, const char* title);
+        Window(uint32_t width, uint32_t height, std::string title);
 
         Window& operator&(const Window&) = delete;
         Window& operator&(Window&&) = delete;
@@ -40,6 +40,8 @@ namespace saf {
         bool ShouldClose() const;
         inline uint32_t GetWidth() const { return m_Width; }
         inline uint32_t GetHeight() const { return m_Height; }
+        inline float fGetWidth() const { return static_cast<float>(m_Width); }
+        inline float fGetHeight() const { return static_cast<float>(m_Height); }
         inline std::string GetTitle() const { return m_Title; }
         
         using EventCallbackFn = std::function<void(Event&)>;

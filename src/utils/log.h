@@ -17,6 +17,11 @@
 #define IFX_ERROR(...)    saf::ifx_error(__VA_ARGS__)
 #define IFX_INFO(...)    saf::log::g_Logger->info(__VA_ARGS__)
 
+#define IFX_TRACE(...)
+#define IFX_WARN(...) 
+#define IFX_ERROR(...)
+#define IFX_INFO(...) 
+
 //#define IFX_TRACE(x)    (std::cout << "[" << TraceID() << "]   " << appname << "_trace: " << x << std::endl)
 //#define IFX_WARNING(x)  (std::cout << "[" << TraceID() << "] " << appname << "_warning: " << x << std::endl)
 //#define IFX_ERROR(x)    (std::cout << "[" << TraceID() << "]   " << appname << "_error: " << x << std::endl)

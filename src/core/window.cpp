@@ -23,7 +23,7 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 namespace saf {
 
-    Window::Window(uint32_t width, uint32_t height, const char* title)
+    Window::Window(uint32_t width, uint32_t height, std::string title)
         : m_Width(width), m_Height(height), m_Title(title), m_CursorState(true), m_CursorStateChange(true)
     {
 
@@ -99,7 +99,6 @@ namespace saf {
                 Window* mywindow = static_cast<Window*>(glfwGetWindowUserPointer(window));
                 mywindow->m_Width = width;
                 mywindow->m_Height = height;
-                mywindow->m_FrameManager->Resize(width, height);
 
                 WindowResizeEvent e(width, height);
                 mywindow->m_EventCallback(e);
@@ -365,6 +364,11 @@ namespace saf {
     void Window::Update()
     {
         glfwPollEvents();
+
+        if (m_Width != m_FrameManager->m_Width || m_Height != m_FrameManager->m_Height)
+        {
+            m_FrameManager->Resize(m_Width, m_Height);
+        }
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
