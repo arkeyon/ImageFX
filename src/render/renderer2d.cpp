@@ -424,16 +424,16 @@ namespace saf {
 
                 uint32_t vertex_offs = m_QuadCount * 4;
 
-                glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
+                //glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
 
                 glm::mat4 rotation = glm::rotate(glm::mat4(1.f), font.char_rotate_angle, glm::vec3(0.f, 0.f, 1.f));
                 //glm::mat3 rotation = glm::mat3(1.f);
-                glm::mat4 translation = glm::translate(glm::mat4(1.f), glm::vec3(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f, 0.f) + font.translation);
+                glm::mat4 translation = glm::translate(glm::mat4(1.f), glm::vec3(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f, 0.f));
 
-                m_VertexBuffer[vertex_offs + 0].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
-                m_VertexBuffer[vertex_offs + 1].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
-                m_VertexBuffer[vertex_offs + 2].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
-                m_VertexBuffer[vertex_offs + 3].pos = translation * rotation * scale * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 0].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 1].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 2].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
+                m_VertexBuffer[vertex_offs + 3].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
 
                 m_VertexBuffer[vertex_offs + 0].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t1);
                 m_VertexBuffer[vertex_offs + 1].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t1);
