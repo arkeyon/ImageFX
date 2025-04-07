@@ -365,6 +365,8 @@ namespace saf {
         int lastspaceindex = 0;
         int lastspacequadindex = m_QuadCount;
 
+        int retries = 0;
+
         for (int i = 0; i < str.Length(); ++i)
         {
             char ch = str[i].code;
@@ -392,35 +394,47 @@ namespace saf {
 
                 glm::vec2 glyphBoundingBoxBottomLeft =
                 {
-                        packedChar->xoff * font.scale,
-                        (packedChar->yoff + m_FontAtlas->m_FontSize) * font.scale
+                    packedChar->xoff * font.scale,
+                    (packedChar->yoff + m_FontAtlas->m_FontSize) * font.scale
                 };
 
                 float char_right = localPosition.x + glyphBoundingBoxBottomLeft.x + glyphSize.x;
                 float char_left = localPosition.x + glyphBoundingBoxBottomLeft.x;
                 if (char_right >= std::max(bounding_first.x, bounding_second.x))
                 {
-                    float word_width = char_right - firstchar;
-                    float line_space = std::abs(bounding_second.x - bounding_first.x);
-
-                    if (word_width < line_space)
+                    if (retries < 1)
                     {
-                        localPosition.y += m_FontAtlas->m_FontSize * font.scale;
-                        localPosition.x = position.x;
-                        m_QuadCount = lastspacequadindex;
+                        float word_width = char_right - firstchar;
+                        float line_space = std::abs(bounding_second.x - bounding_first.x);
 
-                        i = lastspaceindex;
-                        continue;
+                        ++retries;
+
+                        if (word_width < line_space)
+                        {
+                            localPosition.y += m_FontAtlas->m_FontSize * font.scale;
+                            localPosition.x = position.x;
+                            m_QuadCount = lastspacequadindex;
+
+                            i = lastspaceindex;
+                            continue;
+                        }
+                        else
+                        {
+                            localPosition.y += m_FontAtlas->m_FontSize * font.scale;
+                            localPosition.x = position.x;
+
+
+                            --i;
+                            continue;
+                        }
                     }
                     else
                     {
-                        localPosition.y += m_FontAtlas->m_FontSize * font.scale;
-                        localPosition.x = position.x;
-
-                        --i;
-                        continue;
+                        return cursor_pos;
                     }
                 }
+
+                retries = 0;
 
                 uint32_t vertex_offs = m_QuadCount * 4;
 
@@ -428,7 +442,7 @@ namespace saf {
 
                 glm::mat4 rotation = glm::rotate(glm::mat4(1.f), font.char_rotate_angle, glm::vec3(0.f, 0.f, 1.f));
                 //glm::mat3 rotation = glm::mat3(1.f);
-                glm::mat4 translation = glm::translate(glm::mat4(1.f), glm::vec3(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f, 0.f));
+                glm::mat4 translation = glm::translate(glm::mat4(1.f), glm::vec3(localPosition.x + glyphSize.x / 2.f, localPosition.y + glyphSize.y / 2.f, 0.f) + font.translation);
 
                 m_VertexBuffer[vertex_offs + 0].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
                 m_VertexBuffer[vertex_offs + 1].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y + glyphSize.y / 2.f, 0.f, 1.f);
@@ -492,9 +506,9 @@ namespace saf {
         return cursor_pos;
     }
 
-    glm::vec2 Renderer2D::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
+    glm::vec2 Renderer2D::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
     {
-        return DrawString(GraphicalString(str), bounding_first, bounding_second, cursor);
+        return DrawString(GraphicalString(str, font), bounding_first, bounding_second, cursor);
     }
 
 }

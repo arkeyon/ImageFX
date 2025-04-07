@@ -95,12 +95,12 @@ namespace saf {
 			Font font;
 		};
 
-		GraphicalString(std::string str)
+		GraphicalString(std::string str, Font font = Font(saf::FontType::ComicSans, 0.5f))
 		{
 			m_GChars.reserve(str.length());
 			for (char ch : str)
 			{
-				m_GChars.push_back(ch);
+				m_GChars.emplace_back(ch, font);
 			}
 		}
 
@@ -135,8 +135,8 @@ namespace saf {
 	class FadeawayString : public StringAnimator
 	{
 	public:
-		FadeawayString(FontType fonttype, float scale, glm::vec4 color, float fadetime, glm::vec3 fadedir)
-			: m_FadeTime(fadetime), m_FadeDir(fadedir)
+		FadeawayString(FontType fonttype, float scale, glm::vec4 color, float fadetime)
+			: m_FadeTime(fadetime)
 		{
 			m_BaseFont = Font(fonttype, scale, color);
 		}
@@ -152,7 +152,6 @@ namespace saf {
 			for (int i = 0; i < input.length(); ++i)
 			{
 				Font font = m_BaseFont;
-				font.EnableTranslate(m_FadeDir * delta / m_FadeTime);
 				font.EnableFade(delta / m_FadeTime);
 
 				string.m_GChars[i].code = input[i];
@@ -163,7 +162,6 @@ namespace saf {
 	private:
 		Font m_BaseFont = {};
 		float m_FadeTime;
-		glm::vec3 m_FadeDir;
 	};
 
 	class FontAtlas
@@ -228,7 +226,7 @@ namespace saf {
 		void EndScene();
 
 		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
-		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
+		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
 
 	private:
 		uint32_t m_Width, m_Height;

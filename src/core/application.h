@@ -29,6 +29,7 @@ namespace saf {
     private:
         nlohmann::json m_RunArgs;
 
+    protected:
         bool m_Running = true;
     };
 

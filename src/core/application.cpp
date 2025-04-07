@@ -50,7 +50,7 @@ namespace saf {
     {
         IFX_INFO("Application Run");
 
-        while(!m_Window->ShouldClose())
+        while(!m_Window->ShouldClose() && m_Running)
         {
             static auto oldTime = std::chrono::high_resolution_clock::now();
             const int us = 1000000 / maxfps;

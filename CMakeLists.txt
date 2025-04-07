@@ -85,7 +85,7 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(ImageFX PUBLIC "-Wall")
 
 if (MSVC)
-	target_compile_options(${PROJECT_NAME} PUBLIC "-Wall;/utf-8")
+	target_compile_options(${PROJECT_NAME} PRIVATE "-Wall;/utf-8")
 endif()
 ##	file(COPY ${PROJECT_SOURCE_DIR}/assets DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
 ##else()
