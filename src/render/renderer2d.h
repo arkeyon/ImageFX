@@ -45,7 +45,9 @@ namespace saf {
 		Arial,
 		ComicSans,
 		TimesNewRoman,
-		InkFree
+		InkFree,
+		Impact,
+		Chiller
 	};
 
 	enum class FontFlags
@@ -130,38 +132,6 @@ namespace saf {
 	public:
 		virtual GraphicalString Get(std::string input, float delta) = 0;
 		inline virtual bool ShouldDelete(float delta) { return false; }
-	};
-
-	class FadeawayString : public StringAnimator
-	{
-	public:
-		FadeawayString(FontType fonttype, float scale, glm::vec4 color, float fadetime)
-			: m_FadeTime(fadetime)
-		{
-			m_BaseFont = Font(fonttype, scale, color);
-		}
-
-		virtual bool ShouldDelete(float delta)
-		{
-			return delta > m_FadeTime;
-		}
-
-		virtual GraphicalString Get(std::string input, float delta) override
-		{
-			GraphicalString string(input);
-			for (int i = 0; i < input.length(); ++i)
-			{
-				Font font = m_BaseFont;
-				font.EnableFade(delta / m_FadeTime);
-
-				string.m_GChars[i].code = input[i];
-				string.m_GChars[i].font = font;
-			}
-			return string;
-		}
-	private:
-		Font m_BaseFont = {};
-		float m_FadeTime;
 	};
 
 	class FontAtlas

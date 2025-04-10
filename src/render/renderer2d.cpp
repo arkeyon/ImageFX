@@ -194,8 +194,9 @@ namespace saf {
             "C:/Windows/Fonts/arial.ttf",
             "C:/Windows/Fonts/comic.ttf",
             "C:/Windows/Fonts/times.ttf",
-            "C:/Windows/Fonts/inkfree.ttf"
-
+            "C:/Windows/Fonts/inkfree.ttf",
+            "C:/Windows/Fonts/impact.ttf",
+            "assets/chiller.ttf"
         };
         m_FontAtlas = std::make_shared<FontAtlas>(files, 512, 512, 32, 96);
 
