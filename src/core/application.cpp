@@ -37,6 +37,8 @@ namespace saf {
 
         m_Window->Init();
         m_Renderer2D->Init();
+
+        m_Window->SetEventCallback([this](Event& e) { this->OnEvent(e); });
     }
 
     void Application::Init()

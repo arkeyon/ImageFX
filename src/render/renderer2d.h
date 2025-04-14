@@ -9,28 +9,30 @@
 
 #include <deque>
 
+#include <stb/stb_image.h>
+
 #define BIT(x) (1U << x)
 
 namespace saf {
 
-	struct FontVertex {
+	struct Vertex {
 		glm::vec3 pos;
 		glm::vec4 color;
 		glm::vec2 tex_coord;
 		float samplerid;
 
-		static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
-			return { vk::VertexInputBindingDescription(0, sizeof(FontVertex)) };
+		inline static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
+			return { vk::VertexInputBindingDescription(0, sizeof(Vertex)) };
 		}
 
-		static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescription()
+		inline static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescription()
 		{
 			return std::array<vk::VertexInputAttributeDescription, 4>
 			{
-				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(FontVertex, pos)),
-				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(FontVertex, color)),
-				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(FontVertex, tex_coord)),
-				vk::VertexInputAttributeDescription(3, 0, vk::Format::eR32Sfloat, offsetof(FontVertex, samplerid))
+				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
+				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)),
+				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, tex_coord)),
+				vk::VertexInputAttributeDescription(3, 0, vk::Format::eR32Sfloat, offsetof(Vertex, samplerid))
 			};
 		}
 	};
@@ -108,20 +110,17 @@ namespace saf {
 
 		inline size_t Length() const { return m_GChars.size(); }
 
-		std::string ToString()
+		inline std::string ToString()
 		{
 			std::string str = "";
-			for (GraphicalChar ch : m_GChars)
+			for (const GraphicalChar& ch : m_GChars)
 			{
 				str += ch.code;
 			}
 			return str;
 		}
 
-		const GraphicalChar& operator[](uint32_t index) const
-		{
-			return m_GChars[index];
-		}
+		inline const GraphicalChar& operator[](uint32_t index) const { return m_GChars[index]; }
 
 		std::vector<GraphicalChar> m_GChars;
 	};
@@ -175,12 +174,29 @@ namespace saf {
 
 	};
 
-	class Terminal : std::stringbuf
+	struct Image
 	{
-	public:
-		virtual int sync() override;
-	private:
+		Image(std::string file)
+		{
+			vk::ImageCreateInfo image_info;
+			vk::ImageCreateFlagBits::
+			//vkhelper::CreateImage();
+		}
 
+		~Image()
+		{
+			global::g_Device.destroyImageView(m_vkImageView);
+			global::g_Allocator.destroyImage(m_vkImage, m_vmaAllocation);
+		}
+
+		Image(const Image&) = delete;
+		Image(Image&&) = delete;
+		Image& operator=(const Image&) = delete;
+		Image& operator=(Image&&) = delete;
+
+		vk::Image m_vkImage;
+		vk::ImageView m_vkImageView;
+		vma::Allocation m_vmaAllocation;
 	};
 
 	class Renderer2D
@@ -198,6 +214,9 @@ namespace saf {
 		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
 		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
 
+		glm::vec2 DrawImage(std::shared_ptr<Image> image, glm::vec2 position);
+		glm::vec2 DrawImage(std::shared_ptr<Image> image, glm::mat4 transform);
+
 	private:
 		uint32_t m_Width, m_Height;
 
@@ -205,9 +224,10 @@ namespace saf {
 		vk::Pipeline m_vkPipeline = nullptr;
 
 		const uint32_t m_MaxQuads = 0x4000;
-		uint32_t m_QuadCount = 0;
+		uint32_t m_ImageQuadCount = 0;
+		uint32_t m_FontQuadCount = 0;
 
-		FontVertex* m_VertexBuffer = nullptr;
+		Vertex* m_VertexBuffer = nullptr;
 
 		vma::Allocation m_vmaVertexAllocation = nullptr;
 		vk::Buffer m_vkVertexBuffer = nullptr;
@@ -219,6 +239,8 @@ namespace saf {
 		vk::Sampler m_vkFontAtlasSampler = nullptr;
 
 		std::shared_ptr<FontAtlas> m_FontAtlas;
+
+		std::vector<std::shared_ptr<Image>> m_ImageList;
 
 		friend class FrameManager;
 	};

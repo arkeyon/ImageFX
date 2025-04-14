@@ -45,6 +45,7 @@ namespace saf {
 
         virtual void Init() override;
         virtual void Run() override;
+        virtual void OnEvent(Event& e) = 0;
         virtual void Update() = 0;
 
         std::shared_ptr<Window> m_Window;

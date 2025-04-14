@@ -183,7 +183,7 @@ namespace saf {
                     MouseMovedEvent e((float)(xpos), (float)(ypos), (float)(xpos)-x, (float)(ypos)-y);
                     mywindow->m_EventCallback(e);
                 }
-
+                
                 x = (float)xpos;
                 y = (float)ypos;
             });
@@ -363,6 +363,11 @@ namespace saf {
 
     void Window::Update()
     {
+        if (!m_EventCallback) m_EventCallback = [](Event& e)
+            {
+                IFX_TRACE("{0}", e.ToString());
+            };
+
         glfwPollEvents();
 
         if (m_Width != m_FrameManager->m_Width || m_Height != m_FrameManager->m_Height)

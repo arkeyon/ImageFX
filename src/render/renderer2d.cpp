@@ -153,7 +153,7 @@ namespace saf {
 
 	void Renderer2D::Init()
 	{
-        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(FontVertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
+        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
         if (global::g_Allocator.mapMemory(m_vmaVertexAllocation, reinterpret_cast<void**>(&m_VertexBuffer)) != vk::Result::eSuccess)
             IFX_ERROR("Failed to map vertex buffer");
 
@@ -247,8 +247,8 @@ namespace saf {
             )
         };
 
-        auto vertex_input_binding_descs = FontVertex::getBindingDescription();
-        auto vertex_input_attrib_descs = FontVertex::getAttributeDescription();
+        auto vertex_input_binding_descs = Vertex::getBindingDescription();
+        auto vertex_input_attrib_descs = Vertex::getAttributeDescription();
 
         vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
 
@@ -346,9 +346,9 @@ namespace saf {
         uniform.model = glm::mat4(1.f);
         cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
 
-        cmd.drawIndexed(m_QuadCount * 6, 1, 0, 0, 0);
+        cmd.drawIndexed(m_FontQuadCount * 6, 1, 0, 0, 0);
 
-        m_QuadCount = 0;
+        m_FontQuadCount = 0;
 	}
 
 	void Renderer2D::EndScene()
@@ -364,7 +364,7 @@ namespace saf {
         glm::vec2 localPosition = position;
         float firstchar = position.x;
         int lastspaceindex = 0;
-        int lastspacequadindex = m_QuadCount;
+        int lastspacequadindex = m_FontQuadCount;
 
         int retries = 0;
 
@@ -414,7 +414,7 @@ namespace saf {
                         {
                             localPosition.y += m_FontAtlas->m_FontSize * font.scale;
                             localPosition.x = position.x;
-                            m_QuadCount = lastspacequadindex;
+                            m_FontQuadCount = lastspacequadindex;
 
                             i = lastspaceindex;
                             continue;
@@ -437,7 +437,7 @@ namespace saf {
 
                 retries = 0;
 
-                uint32_t vertex_offs = m_QuadCount * 4;
+                uint32_t vertex_offs = m_FontQuadCount * 4;
 
                 //glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
 
@@ -483,11 +483,11 @@ namespace saf {
                     {
                         firstchar = char_left;
                         lastspaceindex = i - 1;
-                        lastspacequadindex = m_QuadCount;
+                        lastspacequadindex = m_FontQuadCount;
                     }
                 }
 
-                ++m_QuadCount;
+                ++m_FontQuadCount;
             }
             else if (ch == '\n')
             {
@@ -510,6 +510,56 @@ namespace saf {
     glm::vec2 Renderer2D::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
     {
         return DrawString(GraphicalString(str, font), bounding_first, bounding_second, cursor);
+    }
+
+    glm::vec2 Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::vec2 position)
+    {
+        DrawImage(image, glm::translate(glm::mat4(1.f), glm::vec3(position.x, position.y, 0.f)));
+    }
+
+    glm::vec2 Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::mat4 transform)
+    {
+        int index = m_ImageList.size();
+        for (int i = 0; i < m_ImageList.size(); ++i)
+        {
+            if (m_ImageList[i] == image)
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index = m_ImageList.size()) m_ImageList.push_back(image);
+
+
+        static glm::vec2 quad[4] = {
+            glm::vec2(+1.f, +1.f),
+            glm::vec2(-1.f, +1.f),
+            glm::vec2(-1.f, -1.f),
+            glm::vec2(+1.f, -1.f)
+        };
+
+        int vertexoffs = (m_MaxQuads - m_ImageQuadCount) * 4 - 1;
+        ++m_ImageQuadCount;
+
+        m_VertexBuffer[vertexoffs - 3].pos = glm::vec3(glm::vec4(quad[0], 0.f, 1.f) * transform);
+        m_VertexBuffer[vertexoffs - 2].pos = glm::vec3(glm::vec4(quad[1], 0.f, 1.f) * transform);
+        m_VertexBuffer[vertexoffs - 1].pos = glm::vec3(glm::vec4(quad[2], 0.f, 1.f) * transform);
+        m_VertexBuffer[vertexoffs - 0].pos = glm::vec3(glm::vec4(quad[3], 0.f, 1.f) * transform);
+
+        m_VertexBuffer[vertexoffs - 3].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+        m_VertexBuffer[vertexoffs - 2].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+        m_VertexBuffer[vertexoffs - 1].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+        m_VertexBuffer[vertexoffs - 0].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+
+        m_VertexBuffer[vertexoffs - 3].tex_coord = quad[0];
+        m_VertexBuffer[vertexoffs - 2].tex_coord = quad[1];
+        m_VertexBuffer[vertexoffs - 1].tex_coord = quad[2];
+        m_VertexBuffer[vertexoffs - 0].tex_coord = quad[3];
+
+        m_VertexBuffer[vertexoffs - 3].samplerid = static_cast<float>(index);
+        m_VertexBuffer[vertexoffs - 2].samplerid = static_cast<float>(index);
+        m_VertexBuffer[vertexoffs - 1].samplerid = static_cast<float>(index);
+        m_VertexBuffer[vertexoffs - 0].samplerid = static_cast<float>(index);
     }
 
 }
