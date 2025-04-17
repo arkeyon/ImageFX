@@ -153,8 +153,12 @@ namespace saf {
 
 	void Renderer2D::Init()
 	{
-        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
+        m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
         if (global::g_Allocator.mapMemory(m_vmaVertexAllocation, reinterpret_cast<void**>(&m_VertexBuffer)) != vk::Result::eSuccess)
+            IFX_ERROR("Failed to map vertex buffer");
+
+        m_vkBasicVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaBasicVertexAllocation);
+        if (global::g_Allocator.mapMemory(m_vmaBasicVertexAllocation, reinterpret_cast<void**>(&m_BasicVertexBuffer)) != vk::Result::eSuccess)
             IFX_ERROR("Failed to map vertex buffer");
 
         uint32_t indices[6]
@@ -163,7 +167,7 @@ namespace saf {
         };
 
         vma::Allocation allocation;
-        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, allocation);
+        vk::Buffer stage_buffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, allocation);
         uint32_t* data;
         if (global::g_Allocator.mapMemory(allocation, reinterpret_cast<void**>(&data)) != vk::Result::eSuccess)
             IFX_ERROR("Failed to map index staging buffer");
@@ -179,7 +183,7 @@ namespace saf {
         }
         global::g_Allocator.unmapMemory(allocation);
 
-        m_vkIndexBuffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eGpuOnly, vma::AllocationCreateFlagBits::eDedicatedMemory, global::g_Allocator, m_vmaIndexAllocation);
+        m_vkIndexBuffer = vkhelper::create_buffer(sizeof(uint32_t) * m_MaxQuads * 6, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferDevice, vma::AllocationCreateFlagBits::eDedicatedMemory, global::g_Allocator, m_vmaIndexAllocation);
 
         saf::vkhelper::immediate_submit(global::g_Device, global::g_GraphicsQueueIndex, [&stage_buffer, this](vk::CommandBuffer cmd)
             {
@@ -189,128 +193,206 @@ namespace saf {
 
         global::g_Allocator.destroyBuffer(stage_buffer, allocation);
 
-        std::vector<std::string> files
         {
-            "C:/Windows/Fonts/arial.ttf",
-            "C:/Windows/Fonts/comic.ttf",
-            "C:/Windows/Fonts/times.ttf",
-            "C:/Windows/Fonts/inkfree.ttf",
-            "C:/Windows/Fonts/impact.ttf",
-            "assets/chiller.ttf"
-        };
-        m_FontAtlas = std::make_shared<FontAtlas>(files, 512, 512, 32, 96);
+            std::vector<std::string> files
+            {
+                "C:/Windows/Fonts/arial.ttf",
+                "C:/Windows/Fonts/comic.ttf",
+                "C:/Windows/Fonts/times.ttf",
+                "C:/Windows/Fonts/inkfree.ttf",
+                "C:/Windows/Fonts/impact.ttf",
+                "assets/chiller.ttf"
+            };
+            m_FontAtlas = std::make_shared<FontAtlas>(files, 512, 512, 32, 96);
 
-        vk::DescriptorSetLayoutBinding desc_layout_binding{};
-        desc_layout_binding.binding = 0;
-        desc_layout_binding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        desc_layout_binding.descriptorCount = 1;
-        desc_layout_binding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-        desc_layout_binding.pImmutableSamplers = nullptr;
+            vk::DescriptorSetLayoutBinding desc_layout_binding{};
+            desc_layout_binding.binding = 0;
+            desc_layout_binding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+            desc_layout_binding.descriptorCount = 1;
+            desc_layout_binding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+            desc_layout_binding.pImmutableSamplers = nullptr;
 
-        vk::DescriptorSetLayoutCreateInfo desc_layout_info({}, { desc_layout_binding });
-        m_vkFontDescriptorSetLayout = global::g_Device.createDescriptorSetLayout(desc_layout_info);
+            vk::DescriptorSetLayoutCreateInfo desc_layout_info({}, { desc_layout_binding });
+            m_vkAtlasDescriptorSetLayout = global::g_Device.createDescriptorSetLayout(desc_layout_info);
 
-        vk::DescriptorSetAllocateInfo desc_alloc_info{};
-        desc_alloc_info.descriptorPool = global::g_DescriptorPool;
-        desc_alloc_info.descriptorSetCount = 1;
-        desc_alloc_info.pSetLayouts = &m_vkFontDescriptorSetLayout;
+            vk::DescriptorSetAllocateInfo desc_alloc_info{};
+            desc_alloc_info.descriptorPool = global::g_DescriptorPool;
+            desc_alloc_info.descriptorSetCount = 1;
+            desc_alloc_info.pSetLayouts = &m_vkAtlasDescriptorSetLayout;
 
-        m_vkFontAtlasDescriptorSet = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
-        m_vkFontAtlasSampler = vkhelper::CreateFontSampler(global::g_Device);
+            m_vkAtlasDescriptorSet = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+            m_vkAtlasSampler = vkhelper::CreateFontSampler(global::g_Device);
 
-        vk::DescriptorImageInfo desc_image_info;
-        desc_image_info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        desc_image_info.imageView = m_FontAtlas->m_vkFontAtlasView;
-        desc_image_info.sampler = m_vkFontAtlasSampler;
+            vk::DescriptorImageInfo desc_image_info;
+            desc_image_info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+            desc_image_info.imageView = m_FontAtlas->m_vkFontAtlasView;
+            desc_image_info.sampler = m_vkAtlasSampler;
 
-        vk::WriteDescriptorSet desc_set_write(m_vkFontAtlasDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
-        global::g_Device.updateDescriptorSets(desc_set_write, {});
+            vk::WriteDescriptorSet desc_set_write(m_vkAtlasDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
+            global::g_Device.updateDescriptorSets(desc_set_write, {});
 
-        vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
+            vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, m_vkFontDescriptorSetLayout, pushconstant_range);
-        m_vkPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
+            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, m_vkAtlasDescriptorSetLayout, pushconstant_range);
+            m_vkAtlasPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
 
-        std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
+            std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
+            {
+                vk::PipelineShaderStageCreateInfo(
+                    {},
+                    vk::ShaderStageFlagBits::eVertex,
+                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/fonts.vert"),
+                    "main"
+                ),
+                vk::PipelineShaderStageCreateInfo(
+                    {},
+                    vk::ShaderStageFlagBits::eFragment,
+                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/fonts.frag"),
+                    "main"
+                )
+            };
+
+            auto vertex_input_binding_descs = Vertex::getBindingDescription();
+            auto vertex_input_attrib_descs = Vertex::getAttributeDescription();
+
+            vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
+
+            // Our attachment will write to all color channels, but no blending is enabled.
+            vk::PipelineColorBlendAttachmentState blend_attachment(
+                vk::True,
+                vk::BlendFactor::eSrcAlpha,              // src factor
+                vk::BlendFactor::eDstAlpha,              // dst factor
+                vk::BlendOp::eMax,                  // color blend op
+                vk::BlendFactor::eOne,              // src alpha factor
+                vk::BlendFactor::eOne,              // dst alpha factor
+                vk::BlendOp::eAdd,                  // alpha blend op
+                vk::ColorComponentFlagBits::eR |    // blend mask
+                vk::ColorComponentFlagBits::eG |
+                vk::ColorComponentFlagBits::eB |
+                vk::ColorComponentFlagBits::eA
+            );
+
+            // Disable all depth testing.
+            vk::PipelineDepthStencilStateCreateInfo depth_stencil;
+
+            m_vkAtlasPipeline = vkhelper::CreateGraphicsPipeline(
+                global::g_Device,
+                nullptr,
+                shader_stages,
+                vertex_input,
+                vk::PrimitiveTopology::eTriangleList,        // We will use triangle lists to draw geometry.
+                0,
+                vk::PolygonMode::eFill,
+                vk::CullModeFlagBits::eBack,
+                vk::FrontFace::eClockwise,
+                { blend_attachment },
+                depth_stencil,
+                m_vkAtlasPipelineLayout,
+                global::g_SurfaceFormat.format
+            ); // We need to specify the pipeline layout
+
+            if (!m_vkAtlasPipeline) IFX_ERROR("Vulkan failed to create atlas graphics pipeline");
+            // Pipeline is baked, we can delete the shader modules now.
+            global::g_Device.destroyShaderModule(shader_stages[0].module);
+            global::g_Device.destroyShaderModule(shader_stages[1].module);
+        }
+
         {
-            vk::PipelineShaderStageCreateInfo(
-                {},
-                vk::ShaderStageFlagBits::eVertex,
-                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/fonts.vert"),
-                "main"
-            ),
-            vk::PipelineShaderStageCreateInfo(
-                {},
-                vk::ShaderStageFlagBits::eFragment,
-                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/fonts.frag"),
-                "main"
-            )
-        };
 
-        auto vertex_input_binding_descs = Vertex::getBindingDescription();
-        auto vertex_input_attrib_descs = Vertex::getAttributeDescription();
+            vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-        vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
+            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
+            m_vkQuadPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
 
-        // Our attachment will write to all color channels, but no blending is enabled.
-        vk::PipelineColorBlendAttachmentState blend_attachment(
-            vk::True,
-            vk::BlendFactor::eSrcAlpha,              // src factor
-            vk::BlendFactor::eDstAlpha,              // dst factor
-            vk::BlendOp::eMax,                  // color blend op
-            vk::BlendFactor::eOne,              // src alpha factor
-            vk::BlendFactor::eOne,              // dst alpha factor
-            vk::BlendOp::eAdd,                  // alpha blend op
-            vk::ColorComponentFlagBits::eR |    // blend mask
-            vk::ColorComponentFlagBits::eG |
-            vk::ColorComponentFlagBits::eB |
-            vk::ColorComponentFlagBits::eA
-        );
+            std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
+            {
+                vk::PipelineShaderStageCreateInfo(
+                    {},
+                    vk::ShaderStageFlagBits::eVertex,
+                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/quad.vert"),
+                    "main"
+                ),
+                vk::PipelineShaderStageCreateInfo(
+                    {},
+                    vk::ShaderStageFlagBits::eFragment,
+                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/quad.frag"),
+                    "main"
+                )
+            };
 
-        // Disable all depth testing.
-        vk::PipelineDepthStencilStateCreateInfo depth_stencil;
+            auto vertex_input_binding_descs = BasicVertex::getBindingDescription();
+            auto vertex_input_attrib_descs = BasicVertex::getAttributeDescription();
 
-        m_vkPipeline = vkhelper::CreateGraphicsPipeline(
-            global::g_Device,
-            nullptr,
-            shader_stages,
-            vertex_input,
-            vk::PrimitiveTopology::eTriangleList,        // We will use triangle lists to draw geometry.
-            0,
-            vk::PolygonMode::eFill,
-            vk::CullModeFlagBits::eBack,
-            vk::FrontFace::eClockwise,
-            { blend_attachment },
-            depth_stencil,
-            m_vkPipelineLayout,
-            global::g_SurfaceFormat.format
-        ); // We need to specify the pipeline layout
+            vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
 
-        if (!m_vkPipeline) IFX_ERROR("Vulkan failed to create graphics pipeline");
-        // Pipeline is baked, we can delete the shader modules now.
-        global::g_Device.destroyShaderModule(shader_stages[0].module);
-        global::g_Device.destroyShaderModule(shader_stages[1].module);
+            // Our attachment will write to all color channels, but no blending is enabled.
+            vk::PipelineColorBlendAttachmentState blend_attachment(
+                vk::True,
+                vk::BlendFactor::eSrcAlpha,              // src factor
+                vk::BlendFactor::eDstAlpha,              // dst factor
+                vk::BlendOp::eMax,                  // color blend op
+                vk::BlendFactor::eOne,              // src alpha factor
+                vk::BlendFactor::eOne,              // dst alpha factor
+                vk::BlendOp::eAdd,                  // alpha blend op
+                vk::ColorComponentFlagBits::eR |    // blend mask
+                vk::ColorComponentFlagBits::eG |
+                vk::ColorComponentFlagBits::eB |
+                vk::ColorComponentFlagBits::eA
+            );
+
+            // Disable all depth testing.
+            vk::PipelineDepthStencilStateCreateInfo depth_stencil;
+
+            m_vkQuadPipeline = vkhelper::CreateGraphicsPipeline(
+                global::g_Device,
+                nullptr,
+                shader_stages,
+                vertex_input,
+                vk::PrimitiveTopology::eTriangleList,        // We will use triangle lists to draw geometry.
+                0,
+                vk::PolygonMode::eFill,
+                vk::CullModeFlagBits::eBack,
+                vk::FrontFace::eClockwise,
+                { blend_attachment },
+                depth_stencil,
+                m_vkQuadPipelineLayout,
+                global::g_SurfaceFormat.format
+            ); // We need to specify the pipeline layout
+
+            if (!m_vkQuadPipeline) IFX_ERROR("Vulkan failed to create basic graphics pipeline");
+            // Pipeline is baked, we can delete the shader modules now.
+            global::g_Device.destroyShaderModule(shader_stages[0].module);
+            global::g_Device.destroyShaderModule(shader_stages[1].module);
+        }
 	}
 
     void Renderer2D::Shutdown()
     {
         global::g_Device.waitIdle();
 
-        if (m_vkFontDescriptorSetLayout) global::g_Device.destroyDescriptorSetLayout(m_vkFontDescriptorSetLayout);
-        if (m_vkFontAtlasDescriptorSet) global::g_Device.freeDescriptorSets(global::g_DescriptorPool, { m_vkFontAtlasDescriptorSet });
+        if (m_vkAtlasDescriptorSetLayout) global::g_Device.destroyDescriptorSetLayout(m_vkAtlasDescriptorSetLayout);
+        if (m_vkAtlasDescriptorSet) global::g_Device.freeDescriptorSets(global::g_DescriptorPool, { m_vkAtlasDescriptorSet });
 
         if (m_vkVertexBuffer)
         {
             global::g_Allocator.unmapMemory(m_vmaVertexAllocation);
             global::g_Allocator.destroyBuffer(m_vkVertexBuffer, m_vmaVertexAllocation);
         }
+        if (m_vkBasicVertexBuffer)
+        {
+            global::g_Allocator.unmapMemory(m_vmaBasicVertexAllocation);
+            global::g_Allocator.destroyBuffer(m_vkBasicVertexBuffer, m_vmaBasicVertexAllocation);
+        }
         if (m_vkIndexBuffer) global::g_Allocator.destroyBuffer(m_vkIndexBuffer, m_vmaIndexAllocation);
 
         if (m_FontAtlas) m_FontAtlas->Shutdown();
-        if (m_vkFontAtlasSampler) global::g_Device.destroySampler(m_vkFontAtlasSampler);
+        if (m_vkAtlasSampler) global::g_Device.destroySampler(m_vkAtlasSampler);
 
-        if (m_vkPipeline) global::g_Device.destroy(m_vkPipeline);
-        if (m_vkPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkPipelineLayout);
+        if (m_vkAtlasPipeline) global::g_Device.destroy(m_vkAtlasPipeline);
+        if (m_vkAtlasPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkAtlasPipelineLayout);
+
+        if (m_vkQuadPipeline) global::g_Device.destroy(m_vkQuadPipeline);
+        if (m_vkQuadPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkQuadPipelineLayout);
     }
 
 	void Renderer2D::BeginScene()
@@ -325,30 +407,43 @@ namespace saf {
 
     void Renderer2D::Flush(vk::CommandBuffer cmd)
 	{
-        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkPipeline);
-
+        //Atlas Draw
+        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipeline);
+        
 		cmd.bindVertexBuffers(0, m_vkVertexBuffer, { 0UL });
 		cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
-
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkFontAtlasDescriptorSet }, {});
-
+        
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
+        
         glm::mat4 projection = glm::mat3(1.f);
         float left = 0.f, right = static_cast<float>(m_Width);
         float top = 0.f, bottom = static_cast<float>(m_Height);
-
+        
         projection[0] = glm::vec4(2.f / (right - left), 0.f, 0.f, 0.f);
         projection[1] = glm::vec4(0.f, 2.f / (bottom - top), 0.f, 0.f);
         projection[2] = glm::vec4(0.f, 0.f, 1.f, 0.f);
         projection[3] = glm::vec4(-(right + left) / (right - left), -(bottom + top) / (bottom - top), 0.f, 1.f);
-
+        
         Uniform uniform{};
         uniform.projection_view = projection;
         uniform.model = glm::mat4(1.f);
-        cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+        cmd.pushConstants<Uniform>(m_vkAtlasPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+        
+        cmd.drawIndexed(m_AtlasQuadCount * 6, 1, 0, 0, 0);
+        m_AtlasQuadCount = 0;
 
-        cmd.drawIndexed(m_FontQuadCount * 6, 1, 0, 0, 0);
+        //Basic Draw
 
-        m_FontQuadCount = 0;
+        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkQuadPipeline);
+
+        cmd.bindVertexBuffers(0, m_vkBasicVertexBuffer, { 0UL });
+        cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
+
+        //cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkQuadPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
+        cmd.pushConstants<Uniform>(m_vkQuadPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+
+        cmd.drawIndexed(m_BasicQuadCount * 6, 1, 0, 0, 0);
+        m_BasicQuadCount = 0;
 	}
 
 	void Renderer2D::EndScene()
@@ -364,7 +459,7 @@ namespace saf {
         glm::vec2 localPosition = position;
         float firstchar = position.x;
         int lastspaceindex = 0;
-        int lastspacequadindex = m_FontQuadCount;
+        int lastspacequadindex = m_AtlasQuadCount;
 
         int retries = 0;
 
@@ -414,7 +509,7 @@ namespace saf {
                         {
                             localPosition.y += m_FontAtlas->m_FontSize * font.scale;
                             localPosition.x = position.x;
-                            m_FontQuadCount = lastspacequadindex;
+                            m_AtlasQuadCount = lastspacequadindex;
 
                             i = lastspaceindex;
                             continue;
@@ -437,7 +532,7 @@ namespace saf {
 
                 retries = 0;
 
-                uint32_t vertex_offs = m_FontQuadCount * 4;
+                uint32_t vertex_offs = m_AtlasQuadCount * 4;
 
                 //glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
 
@@ -483,11 +578,11 @@ namespace saf {
                     {
                         firstchar = char_left;
                         lastspaceindex = i - 1;
-                        lastspacequadindex = m_FontQuadCount;
+                        lastspacequadindex = m_AtlasQuadCount;
                     }
                 }
 
-                ++m_FontQuadCount;
+                ++m_AtlasQuadCount;
             }
             else if (ch == '\n')
             {
@@ -512,54 +607,86 @@ namespace saf {
         return DrawString(GraphicalString(str, font), bounding_first, bounding_second, cursor);
     }
 
-    glm::vec2 Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::vec2 position)
+    //void Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::vec2 position)
+    //{
+    //    DrawImage(image, glm::translate(glm::mat4(1.f), glm::vec3(position.x, position.y, 0.f)));
+    //}
+    //
+    //void Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::mat4 transform)
+    //{
+    //    int index = m_ImageList.size();
+    //    for (int i = 0; i < m_ImageList.size(); ++i)
+    //    {
+    //        if (m_ImageList[i] == image)
+    //        {
+    //            index = i;
+    //            break;
+    //        }
+    //    }
+    //    if (index = m_ImageList.size()) m_ImageList.push_back(image);
+    //
+    //
+    //    static glm::vec2 quad[4] = {
+    //        glm::vec2(+1.f, +1.f),
+    //        glm::vec2(-1.f, +1.f),
+    //        glm::vec2(-1.f, -1.f),
+    //        glm::vec2(+1.f, -1.f)
+    //    };
+    //
+    //    int vertexoffs = (m_MaxQuads - m_ImageQuadCount) * 4 - 1;
+    //    ++m_ImageQuadCount;
+    //
+    //    m_VertexBuffer[vertexoffs - 3].pos = glm::vec3(glm::vec4(quad[0], 0.f, 1.f) * transform);
+    //    m_VertexBuffer[vertexoffs - 2].pos = glm::vec3(glm::vec4(quad[1], 0.f, 1.f) * transform);
+    //    m_VertexBuffer[vertexoffs - 1].pos = glm::vec3(glm::vec4(quad[2], 0.f, 1.f) * transform);
+    //    m_VertexBuffer[vertexoffs - 0].pos = glm::vec3(glm::vec4(quad[3], 0.f, 1.f) * transform);
+    //
+    //    m_VertexBuffer[vertexoffs - 3].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+    //    m_VertexBuffer[vertexoffs - 2].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+    //    m_VertexBuffer[vertexoffs - 1].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+    //    m_VertexBuffer[vertexoffs - 0].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
+    //
+    //    m_VertexBuffer[vertexoffs - 3].tex_coord = quad[0];
+    //    m_VertexBuffer[vertexoffs - 2].tex_coord = quad[1];
+    //    m_VertexBuffer[vertexoffs - 1].tex_coord = quad[2];
+    //    m_VertexBuffer[vertexoffs - 0].tex_coord = quad[3];
+    //
+    //    m_VertexBuffer[vertexoffs - 3].samplerid = static_cast<float>(index);
+    //    m_VertexBuffer[vertexoffs - 2].samplerid = static_cast<float>(index);
+    //    m_VertexBuffer[vertexoffs - 1].samplerid = static_cast<float>(index);
+    //    m_VertexBuffer[vertexoffs - 0].samplerid = static_cast<float>(index);
+    //}
+    //
+    //void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f))
+    //{
+    //
+    //}
+
+    void Renderer2D::FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color)
     {
-        DrawImage(image, glm::translate(glm::mat4(1.f), glm::vec3(position.x, position.y, 0.f)));
+
+        uint32_t vertex = m_BasicQuadCount * 4;
+        ++m_BasicQuadCount;
+
+        m_BasicVertexBuffer[vertex + 0].pos = glm::vec3(+size.x, +size.y, 0.f) + position;
+        m_BasicVertexBuffer[vertex + 1].pos = glm::vec3(0.f, +size.y, 0.f) + position;
+        m_BasicVertexBuffer[vertex + 2].pos = glm::vec3(0.f, 0.f, 0.f) + position;
+        m_BasicVertexBuffer[vertex + 3].pos = glm::vec3(+size.x, 0.f, 0.f) + position;
+
+        m_BasicVertexBuffer[vertex + 0].color = color;
+        m_BasicVertexBuffer[vertex + 1].color = color;
+        m_BasicVertexBuffer[vertex + 2].color = color;
+        m_BasicVertexBuffer[vertex + 3].color = color;
     }
 
-    glm::vec2 Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::mat4 transform)
-    {
-        int index = m_ImageList.size();
-        for (int i = 0; i < m_ImageList.size(); ++i)
-        {
-            if (m_ImageList[i] == image)
-            {
-                index = i;
-                break;
-            }
-        }
-        if (index = m_ImageList.size()) m_ImageList.push_back(image);
-
-
-        static glm::vec2 quad[4] = {
-            glm::vec2(+1.f, +1.f),
-            glm::vec2(-1.f, +1.f),
-            glm::vec2(-1.f, -1.f),
-            glm::vec2(+1.f, -1.f)
-        };
-
-        int vertexoffs = (m_MaxQuads - m_ImageQuadCount) * 4 - 1;
-        ++m_ImageQuadCount;
-
-        m_VertexBuffer[vertexoffs - 3].pos = glm::vec3(glm::vec4(quad[0], 0.f, 1.f) * transform);
-        m_VertexBuffer[vertexoffs - 2].pos = glm::vec3(glm::vec4(quad[1], 0.f, 1.f) * transform);
-        m_VertexBuffer[vertexoffs - 1].pos = glm::vec3(glm::vec4(quad[2], 0.f, 1.f) * transform);
-        m_VertexBuffer[vertexoffs - 0].pos = glm::vec3(glm::vec4(quad[3], 0.f, 1.f) * transform);
-
-        m_VertexBuffer[vertexoffs - 3].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
-        m_VertexBuffer[vertexoffs - 2].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
-        m_VertexBuffer[vertexoffs - 1].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
-        m_VertexBuffer[vertexoffs - 0].color = glm::vec4(1.f, 1.f, 1.f, 1.f);
-
-        m_VertexBuffer[vertexoffs - 3].tex_coord = quad[0];
-        m_VertexBuffer[vertexoffs - 2].tex_coord = quad[1];
-        m_VertexBuffer[vertexoffs - 1].tex_coord = quad[2];
-        m_VertexBuffer[vertexoffs - 0].tex_coord = quad[3];
-
-        m_VertexBuffer[vertexoffs - 3].samplerid = static_cast<float>(index);
-        m_VertexBuffer[vertexoffs - 2].samplerid = static_cast<float>(index);
-        m_VertexBuffer[vertexoffs - 1].samplerid = static_cast<float>(index);
-        m_VertexBuffer[vertexoffs - 0].samplerid = static_cast<float>(index);
-    }
+    //void DrawCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f))
+    //{
+    //
+    //}
+    //
+    //void FillCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f))
+    //{
+    //
+    //}
 
 }

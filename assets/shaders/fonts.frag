@@ -7,6 +7,7 @@ layout(location = 0) in struct {
 } In;
 
 layout(binding = 0) uniform sampler3D u_FontAtlasTextures;
+//layout(binding = 0) uniform sampler2DArray u_FontAtlasTextures;
 
 layout(location = 0) out vec4 fragColor;
 

@@ -9,7 +9,7 @@
 
 #include <deque>
 
-#include <stb/stb_image.h>
+#include <stb_image.h>
 
 #define BIT(x) (1U << x)
 
@@ -33,6 +33,24 @@ namespace saf {
 				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)),
 				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, tex_coord)),
 				vk::VertexInputAttributeDescription(3, 0, vk::Format::eR32Sfloat, offsetof(Vertex, samplerid))
+			};
+		}
+	};
+
+	struct BasicVertex {
+		glm::vec3 pos;
+		glm::vec4 color;
+
+		inline static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
+			return { vk::VertexInputBindingDescription(0, sizeof(BasicVertex)) };
+		}
+
+		inline static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescription()
+		{
+			return std::array<vk::VertexInputAttributeDescription, 2>
+			{
+				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(BasicVertex, pos)),
+				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(BasicVertex, color)),
 			};
 		}
 	};
@@ -174,30 +192,30 @@ namespace saf {
 
 	};
 
-	struct Image
-	{
-		Image(std::string file)
-		{
-			vk::ImageCreateInfo image_info;
-			vk::ImageCreateFlagBits::
-			//vkhelper::CreateImage();
-		}
-
-		~Image()
-		{
-			global::g_Device.destroyImageView(m_vkImageView);
-			global::g_Allocator.destroyImage(m_vkImage, m_vmaAllocation);
-		}
-
-		Image(const Image&) = delete;
-		Image(Image&&) = delete;
-		Image& operator=(const Image&) = delete;
-		Image& operator=(Image&&) = delete;
-
-		vk::Image m_vkImage;
-		vk::ImageView m_vkImageView;
-		vma::Allocation m_vmaAllocation;
-	};
+	//struct Image
+	//{
+	//	Image(std::string file)
+	//	{
+	//		vk::ImageCreateInfo image_info;
+	//		vk::ImageCreateFlagBits::
+	//		//vkhelper::CreateImage();
+	//	}
+	//
+	//	~Image()
+	//	{
+	//		global::g_Device.destroyImageView(m_vkImageView);
+	//		global::g_Allocator.destroyImage(m_vkImage, m_vmaAllocation);
+	//	}
+	//
+	//	Image(const Image&) = delete;
+	//	Image(Image&&) = delete;
+	//	Image& operator=(const Image&) = delete;
+	//	Image& operator=(Image&&) = delete;
+	//
+	//	vk::Image m_vkImage;
+	//	vk::ImageView m_vkImageView;
+	//	vma::Allocation m_vmaAllocation;
+	//};
 
 	class Renderer2D
 	{
@@ -214,33 +232,74 @@ namespace saf {
 		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
 		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
 
-		glm::vec2 DrawImage(std::shared_ptr<Image> image, glm::vec2 position);
-		glm::vec2 DrawImage(std::shared_ptr<Image> image, glm::mat4 transform);
+		//void DrawImage(std::shared_ptr<Image> image, glm::vec2 position);
+		//void DrawImage(std::shared_ptr<Image> image, glm::mat4 transform);
+
+		//void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		void FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+
+		//void DrawCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		//void FillCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+
+		/* DrawCalls
+		 *
+		 * Pipeline
+			 * Aligned Rect, Image2DArray FontAtlas + ImageAtlas (512x512xN)	| Common Vertex / Index Buffers
+			 * Bind Descriptors, Bind VertexBuffer, Bind IndexBuffer			| Common Vertex / Index Buffers
+			 * Set ImageAttachment MemoryBarrier, DrawCMD						| Common Vertex / Index Buffers
+		 * Pipeline																| Common Vertex / Index Buffers
+			 * Aligned Rect, Image2DArray Small (256x256)xN						| Common Vertex / Index Buffers
+			 * Bind Descriptors, Bind VertexBuffer, Bind IndexBuffer			| Common Vertex / Index Buffers
+			 * Set ImageAttachment MemoryBarrier, DrawCMD						| Common Vertex / Index Buffers
+		 * Pipeline																| Common Vertex / Index Buffers
+			 * Aligned Rect, Image2DArray Large (1024x1024)xN					| Common Vertex / Index Buffers
+			 * Bind Descriptors, Bind VertexBuffer, Bind IndexBuffer			| Common Vertex / Index Buffers
+			 * Set ImageAttachment MemoryBarrier, DrawCMD						| Common Vertex / Index Buffers
+		 * Pipeline
+		 * 
+		 * Pipeline						TODO
+			 * Filled TriangleMesh		TODO
+			 *							TODO
+			 * Lines					TODO
+		 * 
+		 */
 
 	private:
 		uint32_t m_Width, m_Height;
 
-		vk::PipelineLayout m_vkPipelineLayout = nullptr;
-		vk::Pipeline m_vkPipeline = nullptr;
+		vk::PipelineLayout m_vkAtlasPipelineLayout = nullptr;
+		vk::Pipeline m_vkAtlasPipeline = nullptr;
+
+		//vk::PipelineLayout m_vkSmallPipelineLayout = nullptr;
+		//vk::Pipeline m_vkSmallPipeline = nullptr;
+		//vk::PipelineLayout m_vkLargePipelineLayout = nullptr;
+		//vk::Pipeline m_vkLargePipeline = nullptr;
+
+		vk::PipelineLayout m_vkQuadPipelineLayout = nullptr;
+		vk::Pipeline m_vkQuadPipeline = nullptr;
 
 		const uint32_t m_MaxQuads = 0x4000;
-		uint32_t m_ImageQuadCount = 0;
-		uint32_t m_FontQuadCount = 0;
+		uint32_t m_AtlasQuadCount = 0;
+		uint32_t m_BasicQuadCount = 0;
 
 		Vertex* m_VertexBuffer = nullptr;
+		BasicVertex* m_BasicVertexBuffer = nullptr;
 
 		vma::Allocation m_vmaVertexAllocation = nullptr;
 		vk::Buffer m_vkVertexBuffer = nullptr;
+		vma::Allocation m_vmaBasicVertexAllocation = nullptr;
+		vk::Buffer m_vkBasicVertexBuffer = nullptr;
+
 		vma::Allocation m_vmaIndexAllocation = nullptr;
 		vk::Buffer m_vkIndexBuffer = nullptr;
 
-		vk::DescriptorSetLayout m_vkFontDescriptorSetLayout = nullptr;
-		vk::DescriptorSet m_vkFontAtlasDescriptorSet = nullptr;
-		vk::Sampler m_vkFontAtlasSampler = nullptr;
+		vk::DescriptorSetLayout m_vkAtlasDescriptorSetLayout = nullptr;
+		vk::DescriptorSet m_vkAtlasDescriptorSet = nullptr;
+		vk::Sampler m_vkAtlasSampler = nullptr;
 
 		std::shared_ptr<FontAtlas> m_FontAtlas;
 
-		std::vector<std::shared_ptr<Image>> m_ImageList;
+		//std::vector<std::shared_ptr<Image>> m_ImageList;
 
 		friend class FrameManager;
 	};

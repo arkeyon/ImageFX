@@ -453,7 +453,7 @@ namespace saf {
             vk::Image image;
 
             alloc_create_info.flags = vma::AllocationCreateFlagBits::eDedicatedMemory;
-            alloc_create_info.usage = vma::MemoryUsage::eGpuOnly;
+            alloc_create_info.usage = vma::MemoryUsage::eAutoPreferDevice;
 
             if (allocator.createImage(&image_create_info, &alloc_create_info, &image, &image_allocation, nullptr) != vk::Result::eSuccess)
                 IFX_ERROR("Failed to create image");
@@ -461,7 +461,7 @@ namespace saf {
             uint8_t* imagedata;
 
             vma::Allocation staging_allocation;
-            vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
+            vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
 
             ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
             memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * depth);
