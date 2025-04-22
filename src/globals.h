@@ -2,7 +2,9 @@
 
 #include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.hpp>
-#include "render/renderer2d.h"
+
+#include "core/input.h"
+#include "core/window.h"
 
 namespace saf {
 
@@ -27,8 +29,8 @@ namespace saf {
 		extern std::vector<const char*> g_Layers;
 		extern std::vector<const char*> g_Extensions;
 
-		extern std::shared_ptr<Renderer2D> g_Renderer2D;
-
+		extern std::shared_ptr<const Input> g_Input;
+		extern std::shared_ptr<const Window> g_Window;
 	}
 
 }

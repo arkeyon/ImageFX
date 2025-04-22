@@ -4,6 +4,9 @@
 #include "GLFW/glfw3.h"
 
 #include "input/event.h"
+#include "core/input.h"
+
+#include <glm/glm.hpp>
 
 namespace saf {
 
@@ -28,13 +31,8 @@ namespace saf {
 
         Window(uint32_t width, uint32_t height, std::string title);
 
-        Window& operator&(const Window&) = delete;
-        Window& operator&(Window&&) = delete;
-        Window(const Window&) = delete;
-        Window(Window&&) = delete;
-        ~Window();
-
         void Init();
+        void Shutdown();
         void Update();
 
         bool ShouldClose() const;
@@ -53,7 +51,6 @@ namespace saf {
         void ShutdownVulkan();
 
         GLFWwindow* m_glfwWindow = nullptr;
-        std::unique_ptr<FrameManager> m_FrameManager;
 
         std::string m_Title;
         unsigned int m_Width, m_Height;

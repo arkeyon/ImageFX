@@ -220,23 +220,28 @@ namespace saf {
 	class Renderer2D
 	{
 	public:
-		Renderer2D(uint32_t width, uint32_t height);
+		Renderer2D();
 
 		void Init();
 		void Shutdown();
 		void BeginScene();
 		void Submit();
-		void Flush(vk::CommandBuffer cmd);
+		void Flush(vk::CommandBuffer cmd, const glm::mat4& projection);
 		void EndScene();
 
 		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
 		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
 
+		glm::vec2 DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
+		glm::vec2 DrawStringCenter(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
+
 		//void DrawImage(std::shared_ptr<Image> image, glm::vec2 position);
 		//void DrawImage(std::shared_ptr<Image> image, glm::mat4 transform);
 
 		//void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		//void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
 		void FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		void FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
 
 		//void DrawCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
 		//void FillCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
@@ -265,10 +270,10 @@ namespace saf {
 		 */
 
 	private:
-		uint32_t m_Width, m_Height;
-
 		vk::PipelineLayout m_vkAtlasPipelineLayout = nullptr;
 		vk::Pipeline m_vkAtlasPipeline = nullptr;
+
+		glm::mat4 m_Projection;
 
 		//vk::PipelineLayout m_vkSmallPipelineLayout = nullptr;
 		//vk::Pipeline m_vkSmallPipeline = nullptr;

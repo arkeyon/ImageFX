@@ -1,21 +1,16 @@
+#pragma once
 
-
-#include <glm/fwd.hpp>
 #include <array>
 #include <vector>
+
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_enums.hpp>
 #include <vulkan/vulkan_funcs.hpp>
 #include <vulkan/vulkan_handles.hpp>
 #include <vulkan/vulkan_structs.hpp>
-
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <shaderc/shaderc.h>
 #include <vk_mem_alloc.hpp>
-
-#include <deque>
+#include <glm/glm.hpp>
 
 #include "render/renderer2d.h"
 
@@ -58,7 +53,7 @@ namespace saf {
         void CreateSwapchain();
         void DestroySwapchain(vk::SwapchainKHR old_swapchain);
 
-        bool Render(std::shared_ptr<Renderer2D> renderer2d);
+        bool Render(std::shared_ptr<Renderer2D> renderer2d, const glm::mat4& projection);
 
         void Destroy();
     private:

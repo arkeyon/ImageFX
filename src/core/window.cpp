@@ -27,23 +27,7 @@ namespace saf {
         : m_Width(width), m_Height(height), m_Title(title), m_CursorState(true), m_CursorStateChange(true)
     {
 
-        m_FrameManager = std::make_unique<FrameManager>(width, height);
-    }
 
-    Window::~Window()
-    {
-        IFX_INFO("Window Shutdown");
-
-        if (global::g_Device) global::g_Device.waitIdle();
-
-        m_FrameManager->Destroy();
-        ShutdownVulkan();
-
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-
-        if (m_glfwWindow) glfwDestroyWindow(m_glfwWindow);
-        glfwTerminate();
     }
 
     void Window::Init()
@@ -60,7 +44,19 @@ namespace saf {
         ImGui_ImplGlfw_InitForVulkan(m_glfwWindow, true);
 
         InitVulkan();
-        m_FrameManager->Init();
+    }
+
+    void Window::Shutdown()
+    {
+        IFX_INFO("Window Shutdown");
+
+        ShutdownVulkan();
+
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+
+        if (m_glfwWindow) glfwDestroyWindow(m_glfwWindow);
+        glfwTerminate();
     }
 
     void Window::InitGLFW()
@@ -343,24 +339,6 @@ namespace saf {
         if (global::g_Instance) global::g_Instance.destroy();
     }
 
-    int printFPS() {
-        static auto oldTime = std::chrono::high_resolution_clock::now();
-        static int fps;
-        fps++;
-
-
-        static int second_fps = 0;
-
-        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - oldTime) >= std::chrono::seconds{ 1 }) {
-            oldTime = std::chrono::high_resolution_clock::now();
-
-            second_fps = fps;
-            fps = 0;
-        }
-
-        return second_fps;
-    }
-
     void Window::Update()
     {
         if (!m_EventCallback) m_EventCallback = [](Event& e)
@@ -369,23 +347,6 @@ namespace saf {
             };
 
         glfwPollEvents();
-
-        if (m_Width != m_FrameManager->m_Width || m_Height != m_FrameManager->m_Height)
-        {
-            m_FrameManager->Resize(m_Width, m_Height);
-        }
-
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        static int fps = 0;
-
-        ImGui::Begin("Debug");
-        ImGui::Text("FPS: %d", fps);
-        ImGui::End();
-
-        if (m_FrameManager->Render(global::g_Renderer2D)) fps = printFPS();
     }
 
     bool Window::ShouldClose() const

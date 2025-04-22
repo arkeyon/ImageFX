@@ -9,9 +9,35 @@
 
 #include "input/event.h"
 
+#include "render/graphics.h"
+
 #define BIND_EVENT_FN(x) std::bind(&x, this, std::placeholders::_1)
 
 namespace saf {
+
+    class Layer
+    {
+    public:
+        inline virtual void Update() {}
+        inline virtual void OnEvent(saf::Event& e) {}
+        inline virtual void Render(std::shared_ptr<Renderer2D> renderer) {}
+        inline virtual void ImGuiRender() {}
+        inline virtual bool IsVisible() { return m_Visible; }
+    protected:
+        Layer() = default;
+
+        bool m_Visible;
+    };
+
+    class DebugLayer : public Layer
+    {
+    public:
+        virtual void Update() override;
+        virtual void OnEvent(saf::Event& e) override;
+        virtual void Render(std::shared_ptr<Renderer2D> renderer) override;
+        virtual void ImGuiRender() override;
+    private:
+    };
 
     class Application
     {
@@ -23,14 +49,12 @@ namespace saf {
         Application& operator=(Application&&) = delete;
         virtual ~Application();
 
-        virtual void Init();
+        virtual void Init() =0;
         virtual void Run();
         virtual void Update() = 0;
-    private:
-        nlohmann::json m_RunArgs;
-
     protected:
         bool m_Running = true;
+        nlohmann::json m_RunArgs;
     };
 
     class GraphicsApplication : public Application
@@ -45,11 +69,22 @@ namespace saf {
 
         virtual void Init() override;
         virtual void Run() override;
-        virtual void OnEvent(Event& e) = 0;
+        virtual void OnEvent(Event& e) =0;
         virtual void Update() = 0;
 
+        inline void AddLayer(std::shared_ptr<Layer> layer) { m_Layers.push_back(layer); }
+
+    protected:
         std::shared_ptr<Window> m_Window;
+        std::shared_ptr<Input> m_Input;
         std::shared_ptr<Renderer2D> m_Renderer2D;
+    private:
+        std::unique_ptr<FrameManager> m_FrameManager;
+
+        std::vector<std::shared_ptr<Layer>> m_Layers;
+        std::shared_ptr<DebugLayer> m_DebugLayer;
+
+        glm::mat4 m_Projection2D;
     };
 
 }

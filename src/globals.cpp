@@ -25,7 +25,8 @@ namespace saf {
 		std::vector<const char*> g_Layers{};
 		std::vector<const char*> g_Extensions{};
 
-		std::shared_ptr<Renderer2D> g_Renderer2D;
+		std::shared_ptr<const Input> g_Input;
+		std::shared_ptr<const Window> g_Window;
 	}
 
 }

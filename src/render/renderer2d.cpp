@@ -145,8 +145,7 @@ namespace saf {
         delete[] m_AlignedQuads;
     }
 
-    Renderer2D::Renderer2D(uint32_t width, uint32_t height)
-        : m_Width(width), m_Height(height)
+    Renderer2D::Renderer2D()
     {
 
     }
@@ -262,7 +261,7 @@ namespace saf {
                 vk::True,
                 vk::BlendFactor::eSrcAlpha,              // src factor
                 vk::BlendFactor::eDstAlpha,              // dst factor
-                vk::BlendOp::eMax,                  // color blend op
+                vk::BlendOp::eAdd,                  // color blend op
                 vk::BlendFactor::eOne,              // src alpha factor
                 vk::BlendFactor::eOne,              // dst alpha factor
                 vk::BlendOp::eAdd,                  // alpha blend op
@@ -330,7 +329,7 @@ namespace saf {
                 vk::True,
                 vk::BlendFactor::eSrcAlpha,              // src factor
                 vk::BlendFactor::eDstAlpha,              // dst factor
-                vk::BlendOp::eMax,                  // color blend op
+                vk::BlendOp::eAdd,                  // color blend op
                 vk::BlendFactor::eOne,              // src alpha factor
                 vk::BlendFactor::eOne,              // dst alpha factor
                 vk::BlendOp::eAdd,                  // alpha blend op
@@ -405,7 +404,7 @@ namespace saf {
         
 	}
 
-    void Renderer2D::Flush(vk::CommandBuffer cmd)
+    void Renderer2D::Flush(vk::CommandBuffer cmd, const glm::mat4& projection)
 	{
         //Atlas Draw
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipeline);
@@ -414,15 +413,6 @@ namespace saf {
 		cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
         
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
-        
-        glm::mat4 projection = glm::mat3(1.f);
-        float left = 0.f, right = static_cast<float>(m_Width);
-        float top = 0.f, bottom = static_cast<float>(m_Height);
-        
-        projection[0] = glm::vec4(2.f / (right - left), 0.f, 0.f, 0.f);
-        projection[1] = glm::vec4(0.f, 2.f / (bottom - top), 0.f, 0.f);
-        projection[2] = glm::vec4(0.f, 0.f, 1.f, 0.f);
-        projection[3] = glm::vec4(-(right + left) / (right - left), -(bottom + top) / (bottom - top), 0.f, 1.f);
         
         Uniform uniform{};
         uniform.projection_view = projection;
@@ -607,6 +597,22 @@ namespace saf {
         return DrawString(GraphicalString(str, font), bounding_first, bounding_second, cursor);
     }
 
+    glm::vec2 Renderer2D::DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
+    {
+        uint32_t startquad = m_AtlasQuadCount;
+        glm::vec2 endpos = DrawString(str, bounding_first, bounding_second, cursor);
+        for (int i = startquad * 4; i < m_AtlasQuadCount * 4; ++i)
+        {
+            m_VertexBuffer[i].pos -= (glm::vec3(endpos - bounding_first, 0.f) + glm::vec3(0.f, m_FontAtlas->m_FontSize * str[0].font.scale, 0.f)) / 2.f;
+        }
+        return (endpos + bounding_first) / 2.f;
+    }
+
+    glm::vec2 Renderer2D::DrawStringCenter(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
+    {
+        return DrawStringCenter(GraphicalString(str, font), bounding_first, bounding_second, cursor);
+    }
+
     //void Renderer2D::DrawImage(std::shared_ptr<Image> image, glm::vec2 position)
     //{
     //    DrawImage(image, glm::translate(glm::mat4(1.f), glm::vec3(position.x, position.y, 0.f)));
@@ -677,6 +683,11 @@ namespace saf {
         m_BasicVertexBuffer[vertex + 1].color = color;
         m_BasicVertexBuffer[vertex + 2].color = color;
         m_BasicVertexBuffer[vertex + 3].color = color;
+    }
+
+    void Renderer2D::FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color)
+    {
+        FillRect(position - glm::vec3(size, 0.f) / 2.f, size, color);
     }
 
     //void DrawCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f))

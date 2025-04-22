@@ -1,4 +1,3 @@
-#include "glm/glm/fwd.hpp"
 #include "safpch.h"
 #include "graphics.h"
 
@@ -10,8 +9,6 @@
 
 #include <vk_mem_alloc.h>
 
-#include "platform/vulkangraphics.h"
-
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
 
@@ -20,8 +17,10 @@
 #include <stb/stb_image_write.h>
 
 #include <glm/glm/gtc/matrix_transform.hpp>
+#include <glm/glm/fwd.hpp>
 
 #include "globals.h"
+#include "platform/vulkangraphics.h"
 
 namespace saf {
 
@@ -44,15 +43,14 @@ namespace saf {
 
     void FrameManager::Resize(uint32_t width, uint32_t height)
     {
+        if (width == m_Width && height == m_Height) return;
         m_Width = width;
         m_Height = height;
         global::g_Device.waitIdle();
-        global::g_Renderer2D->m_Width = width;
-        global::g_Renderer2D->m_Height = height;
         CreateSwapchain();
     }
 
-    bool FrameManager::Render(std::shared_ptr<Renderer2D> renderer2d)
+    bool FrameManager::Render(std::shared_ptr<Renderer2D> renderer2d, const glm::mat4& projection)
     {
 
         vk::Semaphore acquire_semaphore;
@@ -151,7 +149,7 @@ namespace saf {
         // Set scissor dynamically
         cmd.setScissor(0, scissor);
 
-        renderer2d->Flush(cmd);
+        renderer2d->Flush(cmd, projection);
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);

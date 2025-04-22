@@ -343,6 +343,7 @@ namespace saf {
             const vk::DeviceQueueCreateInfo queue_create_info({}, graphics_queue_family, 1U, &queue_priority );
             vk::PhysicalDeviceFeatures device_features{};
             device_features.samplerAnisotropy = vk::True;
+            device_features.fillModeNonSolid = vk::True;
 
             vk::PhysicalDeviceDynamicRenderingFeatures device_dynamic_features{};
             device_dynamic_features.dynamicRendering = VK_TRUE;
