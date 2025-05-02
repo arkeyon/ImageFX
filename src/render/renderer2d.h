@@ -173,7 +173,7 @@ namespace saf {
 			}
 		}
 	private:
-		friend class Renderer2D;
+		friend class TextRenderer;
 
 		uint32_t m_Width, m_Height;
 		const float m_FontSize = 64.f;
@@ -217,34 +217,18 @@ namespace saf {
 	//	vma::Allocation m_vmaAllocation;
 	//};
 
-	class Renderer2D
+	class Renderer
 	{
 	public:
-		Renderer2D();
+		Renderer(glm::mat4 projection);
 
-		void Init();
-		void Shutdown();
-		void BeginScene();
-		void Submit();
-		void Flush(vk::CommandBuffer cmd, const glm::mat4& projection);
-		void EndScene();
+		inline void SetProjection(glm::mat4 projection) { m_Projection = projection; }
 
-		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
-		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
-
-		glm::vec2 DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
-		glm::vec2 DrawStringCenter(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
-
-		//void DrawImage(std::shared_ptr<Image> image, glm::vec2 position);
-		//void DrawImage(std::shared_ptr<Image> image, glm::mat4 transform);
-
-		//void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
-		//void DrawRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
-		void FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
-		void FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
-
-		//void DrawCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
-		//void FillCircle(glm::vec3 position, float radius, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		virtual void Init() = 0;
+		virtual void Shutdown() = 0;
+		virtual void BeginScene() = 0;
+		virtual void Flush(vk::CommandBuffer cmd) = 0;
+		virtual void EndScene() = 0;
 
 		/* DrawCalls
 		 *
@@ -269,44 +253,106 @@ namespace saf {
 		 * 
 		 */
 
-	private:
-		vk::PipelineLayout m_vkAtlasPipelineLayout = nullptr;
-		vk::Pipeline m_vkAtlasPipeline = nullptr;
+	protected:
 
 		glm::mat4 m_Projection;
-
-		//vk::PipelineLayout m_vkSmallPipelineLayout = nullptr;
-		//vk::Pipeline m_vkSmallPipeline = nullptr;
-		//vk::PipelineLayout m_vkLargePipelineLayout = nullptr;
-		//vk::Pipeline m_vkLargePipeline = nullptr;
-
-		vk::PipelineLayout m_vkQuadPipelineLayout = nullptr;
-		vk::Pipeline m_vkQuadPipeline = nullptr;
-
-		const uint32_t m_MaxQuads = 0x4000;
-		uint32_t m_AtlasQuadCount = 0;
-		uint32_t m_BasicQuadCount = 0;
+		vk::PipelineLayout m_vkPipelineLayout = nullptr;
+		vk::Pipeline m_vkPipeline = nullptr;
 
 		Vertex* m_VertexBuffer = nullptr;
-		BasicVertex* m_BasicVertexBuffer = nullptr;
 
 		vma::Allocation m_vmaVertexAllocation = nullptr;
 		vk::Buffer m_vkVertexBuffer = nullptr;
-		vma::Allocation m_vmaBasicVertexAllocation = nullptr;
-		vk::Buffer m_vkBasicVertexBuffer = nullptr;
-
 		vma::Allocation m_vmaIndexAllocation = nullptr;
 		vk::Buffer m_vkIndexBuffer = nullptr;
 
-		vk::DescriptorSetLayout m_vkAtlasDescriptorSetLayout = nullptr;
-		vk::DescriptorSet m_vkAtlasDescriptorSet = nullptr;
-		vk::Sampler m_vkAtlasSampler = nullptr;
-
-		std::shared_ptr<FontAtlas> m_FontAtlas;
-
-		//std::vector<std::shared_ptr<Image>> m_ImageList;
+		vk::DescriptorSetLayout m_vkDescriptorSetLayout = nullptr;
+		vk::DescriptorSet m_vkDescriptorSet = nullptr;
 
 		friend class FrameManager;
+	};
+
+	class TextRenderer : public Renderer
+	{
+	public:
+		TextRenderer(glm::mat4 projection);
+
+		void Init() override;
+		void Shutdown() override;
+		void BeginScene() override;
+		void Flush(vk::CommandBuffer cmd) override;
+		void EndScene() override;
+
+		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
+		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
+
+		glm::vec2 DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
+		glm::vec2 DrawStringCenter(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
+
+	private:
+		glm::mat4 m_Projection;
+		vk::PipelineLayout m_vkPipelineLayout = nullptr;
+		vk::Pipeline m_vkPipeline = nullptr;
+
+		Vertex* m_VertexBuffer = nullptr;
+
+		vma::Allocation m_vmaVertexAllocation = nullptr;
+		vk::Buffer m_vkVertexBuffer = nullptr;
+		vma::Allocation m_vmaIndexAllocation = nullptr;
+		vk::Buffer m_vkIndexBuffer = nullptr;
+
+		uint32_t m_QuadCount;
+		uint32_t m_MaxQuads;
+
+		vk::DescriptorSetLayout m_vkDescriptorSetLayout = nullptr;
+		vk::DescriptorSet m_vkDescriptorSet = nullptr;
+		vk::Sampler m_vkSampler = nullptr;
+
+		std::shared_ptr<FontAtlas> m_FontAtlas;
+	};
+
+	class QuadRenderer : public Renderer
+	{
+	public:
+		void Init() override;
+		void Shutdown() override;
+		void BeginScene() override;
+		void Flush(vk::CommandBuffer cmd) override;
+		void EndScene() override;
+
+		void FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+		void FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color = glm::vec4(1.f, 1.f, 1.f, 1.f));
+
+	private:
+		glm::mat4 m_Projection;
+		vk::PipelineLayout m_vkPipelineLayout = nullptr;
+		vk::Pipeline m_vkPipeline = nullptr;
+
+		Vertex* m_VertexBuffer = nullptr;
+
+		vma::Allocation m_vmaVertexAllocation = nullptr;
+		vk::Buffer m_vkVertexBuffer = nullptr;
+		vma::Allocation m_vmaIndexAllocation = nullptr;
+		vk::Buffer m_vkIndexBuffer = nullptr;
+
+		uint32_t m_QuadCount;
+		uint32_t m_MaxQuads;
+
+		vk::DescriptorSetLayout m_vkDescriptorSetLayout = nullptr;
+		vk::DescriptorSet m_vkDescriptorSet = nullptr;
+	};
+
+	class Renderer2D : public Renderer
+	{
+	public:
+		Renderer2D();
+		void Init() override;
+		void Shutdown() override;
+		void BeginScene() override;
+		void Flush(vk::CommandBuffer cmd) override;
+		void EndScene() override;
+	private:
+		std::vector<std::shared_ptr<Renderer>> m_Renderers;
 	};
 
 }

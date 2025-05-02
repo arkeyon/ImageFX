@@ -145,19 +145,16 @@ namespace saf {
         delete[] m_AlignedQuads;
     }
 
-    Renderer2D::Renderer2D()
+    TextRenderer::TextRenderer(glm::mat4 projection)
+        : Renderer(projection)
     {
 
     }
 
-	void Renderer2D::Init()
+	void TextRenderer::Init()
 	{
         m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
         if (global::g_Allocator.mapMemory(m_vmaVertexAllocation, reinterpret_cast<void**>(&m_VertexBuffer)) != vk::Result::eSuccess)
-            IFX_ERROR("Failed to map vertex buffer");
-
-        m_vkBasicVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaBasicVertexAllocation);
-        if (global::g_Allocator.mapMemory(m_vmaBasicVertexAllocation, reinterpret_cast<void**>(&m_BasicVertexBuffer)) != vk::Result::eSuccess)
             IFX_ERROR("Failed to map vertex buffer");
 
         uint32_t indices[6]
@@ -212,28 +209,28 @@ namespace saf {
             desc_layout_binding.pImmutableSamplers = nullptr;
 
             vk::DescriptorSetLayoutCreateInfo desc_layout_info({}, { desc_layout_binding });
-            m_vkAtlasDescriptorSetLayout = global::g_Device.createDescriptorSetLayout(desc_layout_info);
+            m_vkDescriptorSetLayout = global::g_Device.createDescriptorSetLayout(desc_layout_info);
 
             vk::DescriptorSetAllocateInfo desc_alloc_info{};
             desc_alloc_info.descriptorPool = global::g_DescriptorPool;
             desc_alloc_info.descriptorSetCount = 1;
-            desc_alloc_info.pSetLayouts = &m_vkAtlasDescriptorSetLayout;
+            desc_alloc_info.pSetLayouts = &m_vkDescriptorSetLayout;
 
-            m_vkAtlasDescriptorSet = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
-            m_vkAtlasSampler = vkhelper::CreateFontSampler(global::g_Device);
+            m_vkDescriptorSet = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+            m_vkSampler = vkhelper::CreateFontSampler(global::g_Device);
 
             vk::DescriptorImageInfo desc_image_info;
             desc_image_info.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
             desc_image_info.imageView = m_FontAtlas->m_vkFontAtlasView;
-            desc_image_info.sampler = m_vkAtlasSampler;
+            desc_image_info.sampler = m_vkSampler;
 
-            vk::WriteDescriptorSet desc_set_write(m_vkAtlasDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
+            vk::WriteDescriptorSet desc_set_write(m_vkDescriptorSet, desc_layout_binding.binding, 0, vk::DescriptorType::eCombinedImageSampler, desc_image_info);
             global::g_Device.updateDescriptorSets(desc_set_write, {});
 
             vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, m_vkAtlasDescriptorSetLayout, pushconstant_range);
-            m_vkAtlasPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
+            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, m_vkDescriptorSetLayout, pushconstant_range);
+            m_vkPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
 
             std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
             {
@@ -274,7 +271,7 @@ namespace saf {
             // Disable all depth testing.
             vk::PipelineDepthStencilStateCreateInfo depth_stencil;
 
-            m_vkAtlasPipeline = vkhelper::CreateGraphicsPipeline(
+            m_vkPipeline = vkhelper::CreateGraphicsPipeline(
                 global::g_Device,
                 nullptr,
                 shader_stages,
@@ -286,162 +283,82 @@ namespace saf {
                 vk::FrontFace::eClockwise,
                 { blend_attachment },
                 depth_stencil,
-                m_vkAtlasPipelineLayout,
+                m_vkPipelineLayout,
                 global::g_SurfaceFormat.format
             ); // We need to specify the pipeline layout
 
-            if (!m_vkAtlasPipeline) IFX_ERROR("Vulkan failed to create atlas graphics pipeline");
-            // Pipeline is baked, we can delete the shader modules now.
-            global::g_Device.destroyShaderModule(shader_stages[0].module);
-            global::g_Device.destroyShaderModule(shader_stages[1].module);
-        }
-
-        {
-
-            vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
-
-            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
-            m_vkQuadPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
-
-            std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
-            {
-                vk::PipelineShaderStageCreateInfo(
-                    {},
-                    vk::ShaderStageFlagBits::eVertex,
-                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/quad.vert"),
-                    "main"
-                ),
-                vk::PipelineShaderStageCreateInfo(
-                    {},
-                    vk::ShaderStageFlagBits::eFragment,
-                    vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/quad.frag"),
-                    "main"
-                )
-            };
-
-            auto vertex_input_binding_descs = BasicVertex::getBindingDescription();
-            auto vertex_input_attrib_descs = BasicVertex::getAttributeDescription();
-
-            vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
-
-            // Our attachment will write to all color channels, but no blending is enabled.
-            vk::PipelineColorBlendAttachmentState blend_attachment(
-                vk::True,
-                vk::BlendFactor::eSrcAlpha,              // src factor
-                vk::BlendFactor::eDstAlpha,              // dst factor
-                vk::BlendOp::eAdd,                  // color blend op
-                vk::BlendFactor::eOne,              // src alpha factor
-                vk::BlendFactor::eOne,              // dst alpha factor
-                vk::BlendOp::eAdd,                  // alpha blend op
-                vk::ColorComponentFlagBits::eR |    // blend mask
-                vk::ColorComponentFlagBits::eG |
-                vk::ColorComponentFlagBits::eB |
-                vk::ColorComponentFlagBits::eA
-            );
-
-            // Disable all depth testing.
-            vk::PipelineDepthStencilStateCreateInfo depth_stencil;
-
-            m_vkQuadPipeline = vkhelper::CreateGraphicsPipeline(
-                global::g_Device,
-                nullptr,
-                shader_stages,
-                vertex_input,
-                vk::PrimitiveTopology::eTriangleList,        // We will use triangle lists to draw geometry.
-                0,
-                vk::PolygonMode::eFill,
-                vk::CullModeFlagBits::eBack,
-                vk::FrontFace::eClockwise,
-                { blend_attachment },
-                depth_stencil,
-                m_vkQuadPipelineLayout,
-                global::g_SurfaceFormat.format
-            ); // We need to specify the pipeline layout
-
-            if (!m_vkQuadPipeline) IFX_ERROR("Vulkan failed to create basic graphics pipeline");
+            if (!m_vkPipeline) IFX_ERROR("Vulkan failed to create atlas graphics pipeline");
             // Pipeline is baked, we can delete the shader modules now.
             global::g_Device.destroyShaderModule(shader_stages[0].module);
             global::g_Device.destroyShaderModule(shader_stages[1].module);
         }
 	}
 
-    void Renderer2D::Shutdown()
+    void TextRenderer::Shutdown()
     {
         global::g_Device.waitIdle();
 
-        if (m_vkAtlasDescriptorSetLayout) global::g_Device.destroyDescriptorSetLayout(m_vkAtlasDescriptorSetLayout);
-        if (m_vkAtlasDescriptorSet) global::g_Device.freeDescriptorSets(global::g_DescriptorPool, { m_vkAtlasDescriptorSet });
+        if (m_vkDescriptorSetLayout) global::g_Device.destroyDescriptorSetLayout(m_vkDescriptorSetLayout);
+        if (m_vkDescriptorSet) global::g_Device.freeDescriptorSets(global::g_DescriptorPool, { m_vkDescriptorSet });
 
         if (m_vkVertexBuffer)
         {
             global::g_Allocator.unmapMemory(m_vmaVertexAllocation);
             global::g_Allocator.destroyBuffer(m_vkVertexBuffer, m_vmaVertexAllocation);
         }
-        if (m_vkBasicVertexBuffer)
-        {
-            global::g_Allocator.unmapMemory(m_vmaBasicVertexAllocation);
-            global::g_Allocator.destroyBuffer(m_vkBasicVertexBuffer, m_vmaBasicVertexAllocation);
-        }
+
         if (m_vkIndexBuffer) global::g_Allocator.destroyBuffer(m_vkIndexBuffer, m_vmaIndexAllocation);
 
         if (m_FontAtlas) m_FontAtlas->Shutdown();
-        if (m_vkAtlasSampler) global::g_Device.destroySampler(m_vkAtlasSampler);
+        if (m_vkSampler) global::g_Device.destroySampler(m_vkSampler);
 
-        if (m_vkAtlasPipeline) global::g_Device.destroy(m_vkAtlasPipeline);
-        if (m_vkAtlasPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkAtlasPipelineLayout);
-
-        if (m_vkQuadPipeline) global::g_Device.destroy(m_vkQuadPipeline);
-        if (m_vkQuadPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkQuadPipelineLayout);
+        if (m_vkPipeline) global::g_Device.destroy(m_vkPipeline);
+        if (m_vkPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkPipelineLayout);
     }
 
-	void Renderer2D::BeginScene()
+	void TextRenderer::BeginScene()
 	{
 
 	}
 
-	void Renderer2D::Submit()
-	{
-        
-	}
-
-    void Renderer2D::Flush(vk::CommandBuffer cmd, const glm::mat4& projection)
+    void TextRenderer::Flush(vk::CommandBuffer cmd)
 	{
         //Atlas Draw
-        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipeline);
+        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkPipeline);
         
 		cmd.bindVertexBuffers(0, m_vkVertexBuffer, { 0UL });
 		cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
         
-        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
+        cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkPipelineLayout, 0, { m_vkDescriptorSet }, {});
         
         Uniform uniform{};
-        uniform.projection_view = projection;
+        uniform.projection_view = m_Projection;
         uniform.model = glm::mat4(1.f);
-        cmd.pushConstants<Uniform>(m_vkAtlasPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+        cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
         
-        cmd.drawIndexed(m_AtlasQuadCount * 6, 1, 0, 0, 0);
-        m_AtlasQuadCount = 0;
+        cmd.drawIndexed(m_QuadCount * 6, 1, 0, 0, 0);
+        m_QuadCount = 0;
 
         //Basic Draw
 
-        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkQuadPipeline);
+        cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkPipeline);
 
-        cmd.bindVertexBuffers(0, m_vkBasicVertexBuffer, { 0UL });
+        cmd.bindVertexBuffers(0, m_vkVertexBuffer, { 0UL });
         cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
 
         //cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkQuadPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
-        cmd.pushConstants<Uniform>(m_vkQuadPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
+        cmd.pushConstants<Uniform>(m_vkPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
 
-        cmd.drawIndexed(m_BasicQuadCount * 6, 1, 0, 0, 0);
-        m_BasicQuadCount = 0;
+        cmd.drawIndexed(m_QuadCount * 6, 1, 0, 0, 0);
+        m_QuadCount = 0;
 	}
 
-	void Renderer2D::EndScene()
+	void TextRenderer::EndScene()
 	{
 
 	}
 
-    glm::vec2 Renderer2D::DrawString(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
+    glm::vec2 TextRenderer::DrawString(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
     {
         glm::vec2 position(std::min(bounding_first.x, bounding_second.x), std::min(bounding_first.y, bounding_second.y));
 
@@ -449,7 +366,7 @@ namespace saf {
         glm::vec2 localPosition = position;
         float firstchar = position.x;
         int lastspaceindex = 0;
-        int lastspacequadindex = m_AtlasQuadCount;
+        int lastspacequadindex = m_QuadCount;
 
         int retries = 0;
 
@@ -499,7 +416,7 @@ namespace saf {
                         {
                             localPosition.y += m_FontAtlas->m_FontSize * font.scale;
                             localPosition.x = position.x;
-                            m_AtlasQuadCount = lastspacequadindex;
+                            m_QuadCount = lastspacequadindex;
 
                             i = lastspaceindex;
                             continue;
@@ -522,7 +439,7 @@ namespace saf {
 
                 retries = 0;
 
-                uint32_t vertex_offs = m_AtlasQuadCount * 4;
+                uint32_t vertex_offs = m_QuadCount * 4;
 
                 //glm::mat4 scale = glm::scale(glm::mat4(1.f), glm::vec3(1.f, 1.f, 1.f));
 
@@ -568,11 +485,11 @@ namespace saf {
                     {
                         firstchar = char_left;
                         lastspaceindex = i - 1;
-                        lastspacequadindex = m_AtlasQuadCount;
+                        lastspacequadindex = m_QuadCount;
                     }
                 }
 
-                ++m_AtlasQuadCount;
+                ++m_QuadCount;
             }
             else if (ch == '\n')
             {
@@ -592,23 +509,23 @@ namespace saf {
         return cursor_pos;
     }
 
-    glm::vec2 Renderer2D::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
+    glm::vec2 TextRenderer::DrawString(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
     {
         return DrawString(GraphicalString(str, font), bounding_first, bounding_second, cursor);
     }
 
-    glm::vec2 Renderer2D::DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
+    glm::vec2 TextRenderer::DrawStringCenter(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
     {
-        uint32_t startquad = m_AtlasQuadCount;
+        uint32_t startquad = m_QuadCount;
         glm::vec2 endpos = DrawString(str, bounding_first, bounding_second, cursor);
-        for (int i = startquad * 4; i < m_AtlasQuadCount * 4; ++i)
+        for (int i = startquad * 4; i < m_QuadCount * 4; ++i)
         {
             m_VertexBuffer[i].pos -= (glm::vec3(endpos - bounding_first, 0.f) + glm::vec3(0.f, m_FontAtlas->m_FontSize * str[0].font.scale, 0.f)) / 2.f;
         }
         return (endpos + bounding_first) / 2.f;
     }
 
-    glm::vec2 Renderer2D::DrawStringCenter(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
+    glm::vec2 TextRenderer::DrawStringCenter(const std::string& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor, Font font)
     {
         return DrawStringCenter(GraphicalString(str, font), bounding_first, bounding_second, cursor);
     }
@@ -668,24 +585,92 @@ namespace saf {
     //
     //}
 
-    void Renderer2D::FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color)
+    void QuadRenderer::Init()
     {
+        vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-        uint32_t vertex = m_BasicQuadCount * 4;
-        ++m_BasicQuadCount;
+        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
+        m_vkPipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
 
-        m_BasicVertexBuffer[vertex + 0].pos = glm::vec3(+size.x, +size.y, 0.f) + position;
-        m_BasicVertexBuffer[vertex + 1].pos = glm::vec3(0.f, +size.y, 0.f) + position;
-        m_BasicVertexBuffer[vertex + 2].pos = glm::vec3(0.f, 0.f, 0.f) + position;
-        m_BasicVertexBuffer[vertex + 3].pos = glm::vec3(+size.x, 0.f, 0.f) + position;
+        std::vector<vk::PipelineShaderStageCreateInfo> shader_stages
+        {
+            vk::PipelineShaderStageCreateInfo(
+                {},
+                vk::ShaderStageFlagBits::eVertex,
+                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/mapshader.vert"),
+                "main"
+            ),
+            vk::PipelineShaderStageCreateInfo(
+                {},
+                vk::ShaderStageFlagBits::eFragment,
+                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/mapshader.frag"),
+                "main"
+            )
+        };
 
-        m_BasicVertexBuffer[vertex + 0].color = color;
-        m_BasicVertexBuffer[vertex + 1].color = color;
-        m_BasicVertexBuffer[vertex + 2].color = color;
-        m_BasicVertexBuffer[vertex + 3].color = color;
+        auto vertex_input_binding_descs = BasicVertex::getBindingDescription();
+        auto vertex_input_attrib_descs = BasicVertex::getAttributeDescription();
+
+        vk::PipelineVertexInputStateCreateInfo vertex_input({}, vertex_input_binding_descs, vertex_input_attrib_descs);
+
+        // Our attachment will write to all color channels, but no blending is enabled.
+        vk::PipelineColorBlendAttachmentState blend_attachment(
+            vk::True,
+            vk::BlendFactor::eSrcAlpha,              // src factor
+            vk::BlendFactor::eDstAlpha,              // dst factor
+            vk::BlendOp::eAdd,                  // color blend op
+            vk::BlendFactor::eOne,              // src alpha factor
+            vk::BlendFactor::eOne,              // dst alpha factor
+            vk::BlendOp::eAdd,                  // alpha blend op
+            vk::ColorComponentFlagBits::eR |    // blend mask
+            vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB |
+            vk::ColorComponentFlagBits::eA
+        );
+
+        // Disable all depth testing.
+        vk::PipelineDepthStencilStateCreateInfo depth_stencil;
+
+        m_vkPipeline = vkhelper::CreateGraphicsPipeline(
+            global::g_Device,
+            nullptr,
+            shader_stages,
+            vertex_input,
+            vk::PrimitiveTopology::eTriangleList,        // We will use triangle lists to draw geometry.
+            0,
+            vk::PolygonMode::eFill,
+            vk::CullModeFlagBits::eBack,
+            vk::FrontFace::eClockwise,
+            { blend_attachment },
+            depth_stencil,
+            m_vkPipelineLayout,
+            global::g_SurfaceFormat.format
+        ); // We need to specify the pipeline layout
+
+        if (!m_vkPipeline) IFX_ERROR("Vulkan failed to create basic graphics pipeline");
+        // Pipeline is baked, we can delete the shader modules now.
+        global::g_Device.destroyShaderModule(shader_stages[0].module);
+        global::g_Device.destroyShaderModule(shader_stages[1].module);
     }
 
-    void Renderer2D::FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color)
+    void QuadRenderer::FillRect(glm::vec3 position, glm::vec2 size, glm::vec4 color)
+    {
+
+        uint32_t vertex = m_QuadCount * 4;
+        ++m_QuadCount;
+
+        m_VertexBuffer[vertex + 0].pos = glm::vec3(+size.x, +size.y, 0.f) + position;
+        m_VertexBuffer[vertex + 1].pos = glm::vec3(0.f, +size.y, 0.f) + position;
+        m_VertexBuffer[vertex + 2].pos = glm::vec3(0.f, 0.f, 0.f) + position;
+        m_VertexBuffer[vertex + 3].pos = glm::vec3(+size.x, 0.f, 0.f) + position;
+
+        m_VertexBuffer[vertex + 0].color = color;
+        m_VertexBuffer[vertex + 1].color = color;
+        m_VertexBuffer[vertex + 2].color = color;
+        m_VertexBuffer[vertex + 3].color = color;
+    }
+
+    void QuadRenderer::FillRectCenter(glm::vec3 position, glm::vec2 size, glm::vec4 color)
     {
         FillRect(position - glm::vec3(size, 0.f) / 2.f, size, color);
     }
