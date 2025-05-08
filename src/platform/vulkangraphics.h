@@ -114,7 +114,7 @@ namespace saf {
             vk::PipelineColorBlendStateCreateInfo color_blend_state({}, false, {}, blend_attachment_states);
             std::array<vk::DynamicState, 2>    dynamic_state_enables = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
             vk::PipelineDynamicStateCreateInfo dynamic_state({}, dynamic_state_enables);
-
+            
             vk::PipelineRenderingCreateInfo pipeline_rendering_create_info({}, { swapchain_format }, vk::Format::eUndefined, vk::Format::eUndefined);
             vk::GraphicsPipelineCreateInfo();
             // Final fullscreen composition pass pipeline
@@ -142,6 +142,33 @@ namespace saf {
             vk::Pipeline pipeline;
             std::tie(result, pipeline) = device.createGraphicsPipeline(pipeline_cache, pipeline_create_info);
             assert(result == vk::Result::eSuccess);
+            return pipeline;
+        }
+
+        [nodiscard] inline vk::Pipeline CreateComputePipeline(
+            vk::Device                                                device,
+            vk::PipelineCache                                         pipeline_cache,
+            vk::PipelineShaderStageCreateInfo                         shader_stage,
+            vk::PipelineLayout                                        pipeline_layout
+        )
+        {
+            vk::ComputePipelineCreateInfo pipeline_create_info(
+                {},
+                shader_stage,
+                pipeline_layout,
+                {},
+                -1
+            );
+
+            vk::Result result;
+            vk::Pipeline pipeline;
+            std::tie(result, pipeline) = device.createComputePipeline(pipeline_cache, pipeline_create_info);
+
+            if (result != vk::Result::eSuccess)
+            {
+                IFX_ERROR("Vulkan failed to create compute shader");
+            }
+
             return pipeline;
         }
 

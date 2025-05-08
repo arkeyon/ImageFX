@@ -273,6 +273,10 @@ namespace saf {
 		vk::PipelineLayout m_vkAtlasPipelineLayout = nullptr;
 		vk::Pipeline m_vkAtlasPipeline = nullptr;
 
+		vk::PipelineLayout m_vkComputePipelineLayout = nullptr;
+		vk::Pipeline m_vkComputePipeline = nullptr;
+		vk::PipelineLayout m_vkComputePipelineLayout = nullptr;
+
 		glm::mat4 m_Projection;
 
 		//vk::PipelineLayout m_vkSmallPipelineLayout = nullptr;

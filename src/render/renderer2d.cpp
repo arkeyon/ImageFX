@@ -363,6 +363,29 @@ namespace saf {
             global::g_Device.destroyShaderModule(shader_stages[0].module);
             global::g_Device.destroyShaderModule(shader_stages[1].module);
         }
+
+        vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
+
+        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
+        m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
+
+        vk::PipelineShaderStageCreateInfo shader_stage(
+            {},
+            vk::ShaderStageFlagBits::eCompute,
+            vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/compute.comp"),
+            "main"
+        );
+
+        m_vkComputePipeline = vkhelper::CreateComputePipeline(
+            global::g_Device,
+            nullptr,
+            shader_stage,
+            m_vkComputePipelineLayout
+        ); // We need to specify the pipeline layout
+
+        if (!m_vkComputePipelineLayout) IFX_ERROR("Vulkan failed to create compute pipeline");
+        // Pipeline is baked, we can delete the shader modules now.
+        global::g_Device.destroyShaderModule(shader_stages[0].module);
 	}
 
     void Renderer2D::Shutdown()
