@@ -1,60 +1,13 @@
 #version 450
 
-layout(push_constant) uniform PushBuffer {
-    uint drawCount;
-} ubo;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(std140, binding = 0) readonly buffer _ColorIn {
-    vec4 pixels[ ];
-} ColorIn;
-
-layout(std140, binding = 1) writeonly buffer _ColorOut {
-    vec4 pixels[ ];
-} ColorOut;
-
-layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-
-mat4 translationMatrix(vec2 delta) {
-    return mat4(
-        vec4(1.0, 0.0, 0.0, 0.0),
-        vec4(0.0, 1.0, 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(delta, 0.0, 1.0)
-    );
-}
-
-mat4 scalingMatrix(vec2 scale) {
-    return mat4(
-        vec4(scale.x, 0.0, 0.0, 0.0),
-        vec4(0.0, scale.y, 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(0.0, 0.0, 0.0, 1.0)
-    );
-}
-
-mat4 zrotationMatrix(float theta) {
-    return mat4(
-        vec4(cos(theta), -sin(theta), 0.0, 0.0),
-        vec4(sin(theta), cos(theta), 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(0.0, 0.0, 0.0, 1.0)
-    );
-}
+layout(binding = 0, r8f) uniform writeonly image2D ImageOut;
+layout(binding = 1, r8f) uniform readonly image2D ImageIn;
 
 void main() {
-    uint gID = gl_GlobalInvocationID.x;
-
-    if (gID < ubo.drawCount) {
-        DrawCommand draw = drawCommandsIn.draws[gID];
-        draw.origin.x *= -draw.scale.x;
-        draw.origin.y *= draw.scale.y;
-        vec2 origin = {-draw.origin.x + draw.pos.x, draw.origin.y + draw.pos.y};
-        vec2 originTranslation = {draw.origin.x, -draw.origin.y};
-
-        // Copy data over
-        drawInstancesOut.draws[gID].model = translationMatrix(origin) * zrotationMatrix(-draw.rotation) * translationMatrix(originTranslation) * scalingMatrix(draw.scale);
-        drawInstancesOut.draws[gID].texturePos = drawCommandsIn.draws[gID].texturePos;
-        drawInstancesOut.draws[gID].colour = drawCommandsIn.draws[gID].colour;
-        drawInstancesOut.draws[gID].textureIndex = drawCommandsIn.draws[gID].textureIndex;
-    }
+  uint row = (gl_GlobalInvocationID.x);
+  uint col = (gl_GlobalInvocationID.y);
+  float x = imageLoad(values, ivec2(row, col));
+  imageStore(outputValues, ivec2(gl_GlobalInvocationID.xy), 1.f - x);
 }

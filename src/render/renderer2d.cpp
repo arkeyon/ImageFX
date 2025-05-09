@@ -363,29 +363,76 @@ namespace saf {
             global::g_Device.destroyShaderModule(shader_stages[0].module);
             global::g_Device.destroyShaderModule(shader_stages[1].module);
         }
+        {
+            vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-        vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
+            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
+            m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
 
-        vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
-        m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
+            vk::PipelineShaderStageCreateInfo shader_stage(
+                {},
+                vk::ShaderStageFlagBits::eCompute,
+                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/test.comp"),
+                "main"
+            );
 
-        vk::PipelineShaderStageCreateInfo shader_stage(
-            {},
-            vk::ShaderStageFlagBits::eCompute,
-            vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/compute.comp"),
-            "main"
-        );
+            m_vkComputePipeline = vkhelper::CreateComputePipeline(
+                global::g_Device,
+                nullptr,
+                shader_stage,
+                m_vkComputePipelineLayout
+            ); // We need to specify the pipeline layout
 
-        m_vkComputePipeline = vkhelper::CreateComputePipeline(
-            global::g_Device,
-            nullptr,
-            shader_stage,
-            m_vkComputePipelineLayout
-        ); // We need to specify the pipeline layout
+            if (!m_vkComputePipelineLayout) IFX_ERROR("Vulkan failed to create compute pipeline");
+            // Pipeline is baked, we can delete the shader modules now.
+            global::g_Device.destroyShaderModule(shader_stage.module);
 
-        if (!m_vkComputePipelineLayout) IFX_ERROR("Vulkan failed to create compute pipeline");
-        // Pipeline is baked, we can delete the shader modules now.
-        global::g_Device.destroyShaderModule(shader_stages[0].module);
+            std::array<vk::DescriptorSetLayoutBinding, 2> desc_bindings {};
+            desc_bindings[0].binding = 0;
+            desc_bindings[0].descriptorCount = 1;
+            desc_bindings[0].descriptorType = vk::DescriptorType::eStorageImage;
+            desc_bindings[0].pImmutableSamplers = nullptr;
+            desc_bindings[0].stageFlags = vk::ShaderStageFlagBits::eCompute;
+
+            desc_bindings[1].binding = 1;
+            desc_bindings[1].descriptorCount = 1;
+            desc_bindings[1].descriptorType = vk::DescriptorType::eStorageImage;
+            desc_bindings[1].pImmutableSamplers = nullptr;
+            desc_bindings[1].stageFlags = vk::ShaderStageFlagBits::eCompute;
+
+            vk::DescriptorSetLayoutCreateInfo desc_create_info({}, desc_bindings);
+            vk::DescriptorSetLayout desc_layout = global::g_Device.createDescriptorSetLayout(desc_create_info);
+            vk::DescriptorSetAllocateInfo desc_alloc_info(global::g_DescriptorPool, desc_layout);
+            vk::DescriptorSet desc_set = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+
+            int width, height;
+            stbi_uc* rawimage = stbi_load("assets/test.png", &width, &height, nullptr, 4);
+
+            vma::Allocation image_allocation;
+            vk::Image image1 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, 512, 512, 1, static_cast<uint8_t*>(rawimage), image_allocation);
+            vk::Image image2 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, 512, 512, 1, nullptr, image_allocation);
+            vk::ImageViewCreateInfo image_view_create_info({}, image1, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+            vk::ImageViewCreateInfo image_view_create_info({}, image2, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+            vk::ImageView image_view1 = global::g_Device.createImageView(image_view_create_info);
+            vk::ImageView image_view2 = global::g_Device.createImageView(image_view_create_info);
+
+            stbi_image_free(rawimage);
+
+            std::array<vk::DescriptorImageInfo, 2> image_infos;
+            image_infos[0].imageLayout = vk::ImageLayout::eReadOnlyOptimal;
+            image_infos[0].imageView = image_view1;
+            image_infos[1].imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+            image_infos[1].imageView = image_view2;
+
+            vk::WriteDescriptorSet desc_write(desc_set, 0, 0, desc_bindings[0].descriptorType, image_infos, {}, {});
+            global::g_Device.updateDescriptorSets(desc_write, {});
+
+            vkhelper::immediate_submit(global::g_Device, global::g_ComputeQueueIndex, [this, desc_set](vk::CommandBuffer cmd)
+                {
+                    cmd.bindDescriptorSets({}, m_vkComputePipelineLayout, 0, desc_set, { 0U });
+                    cmd.dispatch(512, 512, 1);
+                });
+        }
 	}
 
     void Renderer2D::Shutdown()

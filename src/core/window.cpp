@@ -230,9 +230,17 @@ namespace saf {
 
         if ((global::g_GraphicsQueueIndex = vkhelper::FindQueueFamily(global::g_Instance, global::g_PhysicalDevice, vk::QueueFlagBits::eGraphics, global::g_Surface)) == UINT32_MAX)
         {
-            IFX_ERROR("Window failed FindQueueFamily present");
+            IFX_ERROR("Window failed FindQueueFamily Graphics");
         }
-        else IFX_TRACE("Window FindQueueFamily present found at index: {0}", global::g_GraphicsQueueIndex);
+        else IFX_TRACE("Window FindQueueFamily Graphics found at index: {0}", global::g_GraphicsQueueIndex);
+        global::g_GraphicsQueue = global::g_Device.getQueue(global::g_GraphicsQueueIndex, 0);
+
+        if ((global::g_ComputeQueueIndex = vkhelper::FindQueueFamily(global::g_Instance, global::g_PhysicalDevice, vk::QueueFlagBits::eCompute, nullptr)) == UINT32_MAX)
+        {
+            IFX_ERROR("Window failed FindQueueFamily Compute");
+        }
+        else IFX_TRACE("Window FindQueueFamily Compute found at index: {0}", global::g_ComputeQueueIndex);
+        global::g_ComputeQueue = global::g_Device.getQueue(global::g_ComputeQueueIndex, 0);
 
         global::g_Device = vkhelper::CreateLogicalDevice(
             global::g_Instance,
@@ -302,7 +310,6 @@ namespace saf {
 
             global::g_DescriptorPool = global::g_Device.createDescriptorPool(pool_create_info);
 
-            global::g_GraphicsQueue = global::g_Device.getQueue(global::g_GraphicsQueueIndex, 0);
 
             ImGui_ImplVulkan_InitInfo imgui_vulkan_impl_info{};
             imgui_vulkan_impl_info.ApiVersion = VK_API_VERSION_1_3;

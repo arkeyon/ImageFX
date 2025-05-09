@@ -18,8 +18,10 @@ namespace saf {
 		extern uint32_t g_GraphicsQueueIndex;
 		extern uint32_t g_PresentQueueIndex;
 		extern uint32_t g_TransferQueueIndex;
+		extern uint32_t g_ComputeQueueIndex;
 
 		extern vk::Queue g_GraphicsQueue;
+		extern vk::Queue g_ComputeQueue;
 
 		extern vk::SurfaceKHR g_Surface;
 		extern vk::SurfaceFormatKHR g_SurfaceFormat;

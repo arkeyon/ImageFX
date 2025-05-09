@@ -13,8 +13,10 @@ namespace saf {
 		uint32_t g_GraphicsQueueIndex;
 		uint32_t g_PresentQueueIndex;
 		uint32_t g_TransferQueueIndex;
+		uint32_t g_ComputeQueueIndex;
 
 		vk::Queue g_GraphicsQueue;
+		vk::Queue g_ComputeQueue;
 
 		vk::SurfaceKHR g_Surface;
 		vk::SurfaceFormatKHR g_SurfaceFormat;

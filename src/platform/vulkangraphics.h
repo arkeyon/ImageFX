@@ -491,9 +491,12 @@ namespace saf {
             vma::Allocation staging_allocation;
             vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
 
-            ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
-            memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * depth);
-            vmaUnmapMemory(allocator, staging_allocation);
+            if (rawimagedata)
+            {
+                ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
+                memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * depth);
+                vmaUnmapMemory(allocator, staging_allocation);
+            }
 
             vkhelper::immediate_submit(device, queue_index, [width, height, stageing_buffer, image](vk::CommandBuffer cmd)
                 {
@@ -574,9 +577,12 @@ namespace saf {
             vma::Allocation staging_allocation;
             vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * layers * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eCpuToGpu, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
 
-            ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
-            memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * layers * depth);
-            vmaUnmapMemory(allocator, staging_allocation);
+            if (rawimagedata)
+            {
+                ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
+                memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * layers * depth);
+                vmaUnmapMemory(allocator, staging_allocation);
+            }
 
             vkhelper::immediate_submit(device, queue_index, [width, height, layers, stageing_buffer, image](vk::CommandBuffer cmd)
                 {
