@@ -69,8 +69,7 @@ namespace saf {
         m_Window = std::make_shared<Window>(1024, 768, title);
         m_Input = std::make_shared<Input>();
         global::g_Input = m_Input;
-        m_Renderer2D = std::make_shared<Renderer2D>();
-        m_FrameManager = std::make_unique<FrameManager>(m_Window->GetWidth(), m_Window->GetHeight());
+        m_Renderer2D = std::make_shared<Renderer2D>(m_Window->GetWidth(), m_Window->GetHeight());
 
         m_Projection2D = glm::mat4(1.f);
         float left = 0.f, right = static_cast<float>(m_Window->GetWidth());
@@ -85,7 +84,6 @@ namespace saf {
     GraphicsApplication::~GraphicsApplication()
     {
         m_Renderer2D->Shutdown();
-        m_FrameManager->Destroy();
         m_Window->Shutdown();
     }
 
@@ -94,7 +92,6 @@ namespace saf {
         IFX_INFO("Application Init");
 
         m_Window->Init();
-        m_FrameManager->Init();
         m_Renderer2D->Init();
 
         m_Window->SetEventCallback([this](Event& e)
@@ -148,7 +145,7 @@ namespace saf {
 
             Update();
             m_Window->Update();
-            m_FrameManager->Resize(m_Window->GetWidth(), m_Window->GetHeight());
+            m_Renderer2D->Resize(m_Window->GetWidth(), m_Window->GetHeight());
 
             ImGui_ImplVulkan_NewFrame();
             ImGui_ImplGlfw_NewFrame();
@@ -164,7 +161,7 @@ namespace saf {
                 }
             }
 
-            m_FrameManager->Render(m_Renderer2D, m_Projection2D);
+            m_Renderer2D->Flush(m_Projection2D);
         }
 
     }

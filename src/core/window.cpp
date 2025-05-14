@@ -233,14 +233,12 @@ namespace saf {
             IFX_ERROR("Window failed FindQueueFamily Graphics");
         }
         else IFX_TRACE("Window FindQueueFamily Graphics found at index: {0}", global::g_GraphicsQueueIndex);
-        global::g_GraphicsQueue = global::g_Device.getQueue(global::g_GraphicsQueueIndex, 0);
 
         if ((global::g_ComputeQueueIndex = vkhelper::FindQueueFamily(global::g_Instance, global::g_PhysicalDevice, vk::QueueFlagBits::eCompute, nullptr)) == UINT32_MAX)
         {
             IFX_ERROR("Window failed FindQueueFamily Compute");
         }
         else IFX_TRACE("Window FindQueueFamily Compute found at index: {0}", global::g_ComputeQueueIndex);
-        global::g_ComputeQueue = global::g_Device.getQueue(global::g_ComputeQueueIndex, 0);
 
         global::g_Device = vkhelper::CreateLogicalDevice(
             global::g_Instance,
@@ -253,6 +251,8 @@ namespace saf {
                 "VK_KHR_dedicated_allocation"
             });
 
+        global::g_GraphicsQueue = global::g_Device.getQueue(global::g_GraphicsQueueIndex, 0);
+        global::g_ComputeQueue = global::g_Device.getQueue(global::g_ComputeQueueIndex, 0);
 
             std::vector<vk::SurfaceFormatKHR> supported_formats = global::g_PhysicalDevice.getSurfaceFormatsKHR(global::g_Surface);
             if (supported_formats.size() == 0) IFX_ERROR("Vulkan surface doesnt support any formats?");

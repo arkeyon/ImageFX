@@ -11,6 +11,9 @@
 #include "globals.h"
 #include <string>
 
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+
 namespace saf {
 
     Font::Font(FontType _fonttype, float _scale, glm::vec4 _color)
@@ -145,13 +148,16 @@ namespace saf {
         delete[] m_AlignedQuads;
     }
 
-    Renderer2D::Renderer2D()
+    Renderer2D::Renderer2D(uint32_t width, uint32_t height)
+        : m_Width(width), m_Height(height)
     {
 
     }
 
 	void Renderer2D::Init()
 	{
+        CreateSwapchain();
+
         m_vkVertexBuffer = vkhelper::create_buffer(sizeof(Vertex) * m_MaxQuads * 4, vk::BufferUsageFlagBits::eVertexBuffer, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, m_vmaVertexAllocation);
         if (global::g_Allocator.mapMemory(m_vmaVertexAllocation, reinterpret_cast<void**>(&m_VertexBuffer)) != vk::Result::eSuccess)
             IFX_ERROR("Failed to map vertex buffer");
@@ -364,10 +370,59 @@ namespace saf {
             global::g_Device.destroyShaderModule(shader_stages[1].module);
         }
         {
-            vk::PushConstantRange pushconstant_range(vk::ShaderStageFlagBits::eVertex, 0, sizeof(Uniform));
 
-            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, {}, pushconstant_range);
-            m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({ pipeline_layout_info });
+            std::array<vk::DescriptorSetLayoutBinding, 2> desc_bindings {};
+            desc_bindings[0].binding = 0;
+            desc_bindings[0].descriptorCount = 1;
+            desc_bindings[0].descriptorType = vk::DescriptorType::eStorageImage;
+            desc_bindings[0].pImmutableSamplers = nullptr;
+            desc_bindings[0].stageFlags = vk::ShaderStageFlagBits::eCompute;
+
+            desc_bindings[1].binding = 1;
+            desc_bindings[1].descriptorCount = 1;
+            desc_bindings[1].descriptorType = vk::DescriptorType::eStorageImage;
+            desc_bindings[1].pImmutableSamplers = nullptr;
+            desc_bindings[1].stageFlags = vk::ShaderStageFlagBits::eCompute;
+
+            vk::DescriptorSetLayoutCreateInfo desc_create_info({}, desc_bindings);
+            vk::DescriptorSetLayout desc_layout = global::g_Device.createDescriptorSetLayout(desc_create_info);
+            if (!desc_layout) IFX_ERROR("Vulkan failed to create descriptor set layout");
+
+            vk::DescriptorSetAllocateInfo desc_alloc_info(global::g_DescriptorPool, desc_layout);
+            vk::DescriptorSet desc_set = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+            if (!desc_set) IFX_ERROR("Vulkan failed to allocate descriptor set");
+
+            int width, height;
+            stbi_uc* rawimage = stbi_load("assets/test.png", &width, &height, nullptr, 4);
+
+            vma::Allocation image_allocation;
+            vk::Image image1 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, static_cast<uint8_t*>(rawimage), image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferDst, vk::ImageLayout::eTransferDstOptimal);
+            vk::Image image2 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, nullptr, image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc, vk::ImageLayout::eGeneral);
+            vk::ImageViewCreateInfo image_view_create_info1({}, image1, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+            vk::ImageViewCreateInfo image_view_create_info2({}, image2, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+            vk::ImageView image_view1 = global::g_Device.createImageView(image_view_create_info1);
+            vk::ImageView image_view2 = global::g_Device.createImageView(image_view_create_info2);
+
+            global::g_GraphicsQueue.waitIdle();
+            stbi_image_free(rawimage);
+
+            vk::DescriptorImageInfo image_info1{};
+            image_info1.imageLayout = vk::ImageLayout::eGeneral;
+            image_info1.imageView = image_view1;
+            vk::DescriptorImageInfo image_info2{};
+            image_info2.imageLayout = vk::ImageLayout::eGeneral;
+            image_info2.imageView = image_view2;
+
+            std::array<vk::WriteDescriptorSet, 2> desc_writes
+            {
+                vk::WriteDescriptorSet(desc_set, 0, 0, desc_bindings[0].descriptorType, image_info1, {}, {}),
+                vk::WriteDescriptorSet(desc_set, 1, 0, desc_bindings[1].descriptorType, image_info2, {}, {})
+            };
+
+            global::g_Device.updateDescriptorSets(desc_writes, {});
+
+            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, desc_layout, {});
+            m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({pipeline_layout_info});
 
             vk::PipelineShaderStageCreateInfo shader_stage(
                 {},
@@ -387,51 +442,65 @@ namespace saf {
             // Pipeline is baked, we can delete the shader modules now.
             global::g_Device.destroyShaderModule(shader_stage.module);
 
-            std::array<vk::DescriptorSetLayoutBinding, 2> desc_bindings {};
-            desc_bindings[0].binding = 0;
-            desc_bindings[0].descriptorCount = 1;
-            desc_bindings[0].descriptorType = vk::DescriptorType::eStorageImage;
-            desc_bindings[0].pImmutableSamplers = nullptr;
-            desc_bindings[0].stageFlags = vk::ShaderStageFlagBits::eCompute;
+            vma::Allocation recieve_buffer_alloc;
+            vk::Buffer recieve_buffer = vkhelper::create_buffer(width * height * 4, vk::BufferUsageFlagBits::eTransferDst, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferDevice, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, recieve_buffer_alloc);
 
-            desc_bindings[1].binding = 1;
-            desc_bindings[1].descriptorCount = 1;
-            desc_bindings[1].descriptorType = vk::DescriptorType::eStorageImage;
-            desc_bindings[1].pImmutableSamplers = nullptr;
-            desc_bindings[1].stageFlags = vk::ShaderStageFlagBits::eCompute;
+            vkhelper::immediate_submit(global::g_Device, global::g_ComputeQueueIndex, [this, desc_set, width, height, image1, image2, recieve_buffer](vk::CommandBuffer cmd)
+            {
+                cmd.bindPipeline(vk::PipelineBindPoint::eCompute, m_vkComputePipeline);
 
-            vk::DescriptorSetLayoutCreateInfo desc_create_info({}, desc_bindings);
-            vk::DescriptorSetLayout desc_layout = global::g_Device.createDescriptorSetLayout(desc_create_info);
-            vk::DescriptorSetAllocateInfo desc_alloc_info(global::g_DescriptorPool, desc_layout);
-            vk::DescriptorSet desc_set = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+                vk::ImageMemoryBarrier image_memory_barrier_pre(
+                    vk::AccessFlagBits::eNone,
+                    vk::AccessFlagBits::eShaderRead,
+                    vk::ImageLayout::eTransferDstOptimal,
+                    vk::ImageLayout::eGeneral,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    image1,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
 
-            int width, height;
-            stbi_uc* rawimage = stbi_load("assets/test.png", &width, &height, nullptr, 4);
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre);
 
-            vma::Allocation image_allocation;
-            vk::Image image1 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, 512, 512, 1, static_cast<uint8_t*>(rawimage), image_allocation);
-            vk::Image image2 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, 512, 512, 1, nullptr, image_allocation);
-            vk::ImageViewCreateInfo image_view_create_info({}, image1, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-            vk::ImageViewCreateInfo image_view_create_info({}, image2, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-            vk::ImageView image_view1 = global::g_Device.createImageView(image_view_create_info);
-            vk::ImageView image_view2 = global::g_Device.createImageView(image_view_create_info);
+                vk::ImageMemoryBarrier image_memory_barrier_pre2(
+                    vk::AccessFlagBits::eNone,
+                    vk::AccessFlagBits::eShaderWrite,
+                    vk::ImageLayout::eUndefined,
+                    vk::ImageLayout::eGeneral,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    image2,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
 
-            stbi_image_free(rawimage);
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre2);
 
-            std::array<vk::DescriptorImageInfo, 2> image_infos;
-            image_infos[0].imageLayout = vk::ImageLayout::eReadOnlyOptimal;
-            image_infos[0].imageView = image_view1;
-            image_infos[1].imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-            image_infos[1].imageView = image_view2;
+                cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_vkComputePipelineLayout, 0, desc_set, {});
+                cmd.dispatch(width / 64, height, 1);
 
-            vk::WriteDescriptorSet desc_write(desc_set, 0, 0, desc_bindings[0].descriptorType, image_infos, {}, {});
-            global::g_Device.updateDescriptorSets(desc_write, {});
+                vk::ImageMemoryBarrier image_memory_barrier_post(
+                    vk::AccessFlagBits::eShaderWrite,
+                    vk::AccessFlagBits::eTransferWrite,
+                    vk::ImageLayout::eGeneral,
+                    vk::ImageLayout::eTransferSrcOptimal,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    VK_QUEUE_FAMILY_IGNORED,
+                    image2,
+                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                );
 
-            vkhelper::immediate_submit(global::g_Device, global::g_ComputeQueueIndex, [this, desc_set](vk::CommandBuffer cmd)
-                {
-                    cmd.bindDescriptorSets({}, m_vkComputePipelineLayout, 0, desc_set, { 0U });
-                    cmd.dispatch(512, 512, 1);
-                });
+                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_post);
+
+                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
+
+                cmd.copyImageToBuffer(image2, vk::ImageLayout::eTransferSrcOptimal, recieve_buffer, buffer_image_copy);
+            });
+
+            global::g_ComputeQueue.waitIdle();
+
+            const void* recieve_data = static_cast<stbi_uc*>(global::g_Allocator.mapMemory(recieve_buffer_alloc));
+            stbi_write_jpg("output.jpeg", width, height, 4, recieve_data, 0);
+
         }
 	}
 
@@ -462,6 +531,9 @@ namespace saf {
 
         if (m_vkQuadPipeline) global::g_Device.destroy(m_vkQuadPipeline);
         if (m_vkQuadPipelineLayout) global::g_Device.destroyPipelineLayout(m_vkQuadPipelineLayout);
+
+        for (auto semiphore : m_vkRecycleSemaphores) if (semiphore) global::g_Device.destroySemaphore(semiphore);
+        if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
     }
 
 	void Renderer2D::BeginScene()
@@ -474,21 +546,110 @@ namespace saf {
         
 	}
 
-    void Renderer2D::Flush(vk::CommandBuffer cmd, const glm::mat4& projection)
+    bool Renderer2D::Flush(const glm::mat4& projection)
 	{
+        vk::Semaphore acquire_semaphore;
+        if (m_vkRecycleSemaphores.empty())
+        {
+            acquire_semaphore = global::g_Device.createSemaphore({});
+        }
+        else
+        {
+            acquire_semaphore = m_vkRecycleSemaphores.back();
+            m_vkRecycleSemaphores.pop_back();
+        }
+
+        vk::Result res;
+        uint32_t   index;
+        std::tie(res, index) = global::g_Device.acquireNextImageKHR(m_vkSwapchainData.swapchain, UINT64_MAX, acquire_semaphore);
+
+        if (res != vk::Result::eSuccess)
+        {
+            m_vkRecycleSemaphores.push_back(acquire_semaphore);
+            IFX_WARN("Vulkan failed acquireNextImage");
+            global::g_GraphicsQueue.waitIdle();
+            return false;
+        }
+        else
+        {
+            // If we have outstanding fences for this swapchain image, wait for them to complete first. Then reset them.
+            if (m_vkFramesData[index].queue_submit_fence)
+            {
+                (void)global::g_Device.waitForFences(m_vkFramesData[index].queue_submit_fence, true, UINT64_MAX);
+                global::g_Device.resetFences(m_vkFramesData[index].queue_submit_fence);
+            }
+
+            if (m_vkFramesData[index].primary_command_pool)
+            {
+                global::g_Device.resetCommandPool(m_vkFramesData[index].primary_command_pool);
+            }
+
+            // Recycle the old semaphore back into the semaphore manager.
+            vk::Semaphore old_semaphore = m_vkFramesData[index].swapchain_acquire_semaphore;
+
+            if (old_semaphore)
+            {
+                m_vkRecycleSemaphores.push_back(old_semaphore);
+            }
+
+            m_vkFramesData[index].swapchain_acquire_semaphore = acquire_semaphore;
+        }
+
+        vk::CommandBuffer cmd = m_vkFramesData[index].primary_command_buffer;
+
+        // We will only submit this once before it's recycled.
+        vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        // Begin command recording
+
+        vk::Image swapchain_image = global::g_Device.getSwapchainImagesKHR(m_vkSwapchainData.swapchain)[index];
+
+        cmd.begin(begin_info);
+
+        vk::ImageMemoryBarrier image_memory_barrier(
+            vk::AccessFlagBits::eNone,
+            vk::AccessFlagBits::eColorAttachmentWrite,
+            vk::ImageLayout::eUndefined,
+            vk::ImageLayout::eColorAttachmentOptimal,
+            0U,
+            0U,
+            swapchain_image,
+            vk::ImageSubresourceRange{
+                vk::ImageAspectFlagBits::eColor,0U, 1U, 0U, 1U
+            });
+
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, {}, {}, { image_memory_barrier });
+
+        // Set clear color values.
+        vk::ClearValue clear_value;
+        clear_value.color = vk::ClearColorValue(std::array<float, 4>({ {0.01f, 0.01f, 0.033f, 1.0f} }));
+
+        const vk::RenderingAttachmentInfo color_attachment_info(m_vkSwapchainData.image_views[index], vk::ImageLayout::eAttachmentOptimalKHR, vk::ResolveModeFlagBits::eNone, {}, vk::ImageLayout::eUndefined, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, clear_value);
+
+        vk::RenderingInfo rendering_info({}, { {0, 0}, {m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height} }, 1, 0, { color_attachment_info }, nullptr, nullptr);
+
+        cmd.beginRenderingKHR(rendering_info);
+
+        vk::Viewport vp(0.0f, 0.0f, static_cast<float>(m_vkSwapchainData.extent.width), static_cast<float>(m_vkSwapchainData.extent.height), 0.0f, 1.0f);
+        // Set viewport dynamically
+        cmd.setViewport(0, vp);
+
+        vk::Rect2D scissor({ 0, 0 }, { m_vkSwapchainData.extent.width, m_vkSwapchainData.extent.height });
+        // Set scissor dynamically
+        cmd.setScissor(0, scissor);
+
         //Atlas Draw
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipeline);
-        
-		cmd.bindVertexBuffers(0, m_vkVertexBuffer, { 0UL });
-		cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
-        
+
+        cmd.bindVertexBuffers(0, m_vkVertexBuffer, { 0UL });
+        cmd.bindIndexBuffer(m_vkIndexBuffer, { 0UL }, vk::IndexType::eUint32);
+
         cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_vkAtlasPipelineLayout, 0, { m_vkAtlasDescriptorSet }, {});
-        
+
         Uniform uniform{};
         uniform.projection_view = projection;
         uniform.model = glm::mat4(1.f);
         cmd.pushConstants<Uniform>(m_vkAtlasPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, uniform);
-        
+
         cmd.drawIndexed(m_AtlasQuadCount * 6, 1, 0, 0, 0);
         m_AtlasQuadCount = 0;
 
@@ -504,12 +665,232 @@ namespace saf {
 
         cmd.drawIndexed(m_BasicQuadCount * 6, 1, 0, 0, 0);
         m_BasicQuadCount = 0;
+
+        ImGui::Render();
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+        cmd.endRenderingKHR();
+
+        vk::ImageMemoryBarrier image_memory_barrier2(
+            vk::AccessFlagBits::eColorAttachmentWrite,
+            vk::AccessFlagBits::eNone,
+            vk::ImageLayout::eColorAttachmentOptimal,
+            vk::ImageLayout::ePresentSrcKHR,
+            0U,
+            0U,
+            swapchain_image,
+            vk::ImageSubresourceRange{
+                vk::ImageAspectFlagBits::eColor,0U, 1U, 0U, 1U
+            });
+
+        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eBottomOfPipe, {}, {}, {}, { image_memory_barrier2 });
+
+        // Complete the command buffer.
+        cmd.end();
+
+        // Submit it to the queue with a release semaphore.
+        if (!m_vkFramesData[index].swapchain_release_semaphore)
+        {
+            m_vkFramesData[index].swapchain_release_semaphore = global::g_Device.createSemaphore({});
+        }
+
+        vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+        vk::SubmitInfo info(
+            m_vkFramesData[index].swapchain_acquire_semaphore,
+            wait_stage,
+            cmd,
+            m_vkFramesData[index].swapchain_release_semaphore
+        );
+        // Submit command buffer to graphics queue
+        global::g_GraphicsQueue.submit(info, m_vkFramesData[index].queue_submit_fence);
+
+        // Present swapchain image
+        vk::PresentInfoKHR present_info(m_vkFramesData[index].swapchain_release_semaphore, m_vkSwapchainData.swapchain, index);
+        res = global::g_GraphicsQueue.presentKHR(present_info);
+
+        if (res != vk::Result::eSuccess)
+        {
+            IFX_ERROR("Failed to present swapchain image.");
+        }
+
+        return true;
 	}
 
 	void Renderer2D::EndScene()
 	{
 
-	}
+    }
+
+    void Renderer2D::Resize(uint32_t width, uint32_t height)
+    {
+        if (width == m_Width && height == m_Height) return;
+        m_Width = width;
+        m_Height = height;
+        global::g_Device.waitIdle();
+        CreateSwapchain();
+    }
+
+    void Renderer2D::CreateSwapchain()
+    {
+        IFX_TRACE("Window CreateSwapchain");
+        vk::SurfaceCapabilitiesKHR capabilities = global::g_PhysicalDevice.getSurfaceCapabilitiesKHR(global::g_Surface);
+        std::vector<vk::PresentModeKHR> supported_preset_modes = global::g_PhysicalDevice.getSurfacePresentModesKHR(global::g_Surface);
+
+        if (supported_preset_modes.size() == 0) IFX_ERROR("Vulkan surface doesnt support any presentModes?");
+
+        m_vkSwapchainData.format = global::g_SurfaceFormat.format;
+
+        uint32_t desired_swapchain_images = capabilities.minImageCount + 1;
+        if ((capabilities.maxImageCount > 0) && (desired_swapchain_images > capabilities.maxImageCount))
+        {
+            // Application must settle for fewer images than desired.
+            desired_swapchain_images = capabilities.maxImageCount;
+            IFX_WARN("Vulkan settling for {0} swapchain images, {1} desired", capabilities.maxImageCount, desired_swapchain_images);
+        }
+
+        vk::SurfaceTransformFlagBitsKHR pre_transform =
+            (capabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) ?
+            vk::SurfaceTransformFlagBitsKHR::eIdentity : capabilities.currentTransform;
+
+        vk::CompositeAlphaFlagBitsKHR composite = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+        if (capabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eOpaque)
+        {
+            composite = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+        }
+        else if (capabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eInherit)
+        {
+            composite = vk::CompositeAlphaFlagBitsKHR::eInherit;
+        }
+        else if (capabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied)
+        {
+            composite = vk::CompositeAlphaFlagBitsKHR::ePreMultiplied;
+        }
+        else if (capabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied)
+        {
+            composite = vk::CompositeAlphaFlagBitsKHR::ePostMultiplied;
+        }
+
+        vk::Extent2D extent{
+            std::min(m_Width, capabilities.currentExtent.width),
+            std::min(m_Height, capabilities.currentExtent.height) };
+
+        m_vkSwapchainData.extent = extent;
+        vk::SwapchainKHR old_swapchain = m_vkSwapchainData.swapchain;
+
+        vk::PresentModeKHR present_mode = vk::PresentModeKHR::eFifo;
+        for (const auto mode : supported_preset_modes)
+        {
+            if (mode == vk::PresentModeKHR::eMailbox)
+            {
+                present_mode = mode;
+                break;
+            }
+        }
+
+        if (present_mode == vk::PresentModeKHR::eFifo) IFX_TRACE("Vulkan physical device doesnt support mailbox present mode, defaulting to FiFo");
+        else IFX_TRACE("Vulkan using mailbox present mode");
+
+        vk::SwapchainCreateInfoKHR swapchain_create_info(
+            {},                                                 //flags_                 = {}
+            global::g_Surface,                                        //surface_               = {}
+            desired_swapchain_images,                           //minImageCount_         = {}
+            global::g_SurfaceFormat.format,                                //imageFormat_           = VULKAN_HPP_NAMESPACE::Format::eUndefined
+            global::g_SurfaceFormat.colorSpace,                            //imageColorSpace_       = VULKAN_HPP_NAMESPACE::ColorSpaceKHR::eSrgbNonlinear
+            extent,                                             //imageExtent_           = {}
+            1,                                                  //imageArrayLayers_      = {}
+            vk::ImageUsageFlagBits::eColorAttachment,           //imageUsage_            = {},
+            vk::SharingMode::eExclusive,                        //imageSharingMode_      = VULKAN_HPP_NAMESPACE::SharingMode::eExclusive,
+            {},                                                 //queueFamilyIndexCount_ = {},
+            {},                                                 //pQueueFamilyIndices_   = {},
+            pre_transform,                                      //preTransform_          = VULKAN_HPP_NAMESPACE::SurfaceTransformFlagBitsKHR::eIdentity,
+            composite,                                          //compositeAlpha_        = VULKAN_HPP_NAMESPACE::CompositeAlphaFlagBitsKHR::eOpaque,
+            present_mode,                                       //presentMode_           = VULKAN_HPP_NAMESPACE::PresentModeKHR::eImmediate,
+            VK_TRUE,                                            //clipped_               = {},
+            old_swapchain                                       //oldSwapchain_          = {},
+        );
+
+        m_vkSwapchainData.swapchain = global::g_Device.createSwapchainKHR(swapchain_create_info);
+        if (!m_vkSwapchainData.swapchain) IFX_ERROR("Vulkan failed to create swapchain");
+
+        DestroySwapchain(old_swapchain);
+
+        std::vector<vk::Image> swapchain_images = global::g_Device.getSwapchainImagesKHR(m_vkSwapchainData.swapchain);
+        size_t image_count = swapchain_images.size();
+
+        // Initialize per-frame resources.
+        // Every swapchain image has its own command pool and fence manager.
+        // This makes it very easy to keep track of when we can reset command buffers and such.
+        m_vkFramesData.clear();
+        m_vkFramesData.resize(image_count);
+
+        for (auto& frame_data : m_vkFramesData)
+        {
+            frame_data.queue_submit_fence = global::g_Device.createFence({ vk::FenceCreateFlagBits::eSignaled });
+            frame_data.primary_command_pool = global::g_Device.createCommandPool({ vk::CommandPoolCreateFlagBits::eTransient, global::g_GraphicsQueueIndex });
+            vk::CommandBufferAllocateInfo command_buffer_allocate_info(frame_data.primary_command_pool, vk::CommandBufferLevel::ePrimary, 1);
+            frame_data.primary_command_buffer = global::g_Device.allocateCommandBuffers(command_buffer_allocate_info).front();
+        }
+
+        for (size_t i = 0; i < image_count; i++)
+        {
+            // Create an image view which we can render into.
+            vk::ImageViewCreateInfo image_view_create_info({},
+                swapchain_images[i],
+                vk::ImageViewType::e2D,
+                global::g_SurfaceFormat.format,
+                { vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eG, vk::ComponentSwizzle::eB, vk::ComponentSwizzle::eA },
+                { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 });
+
+            vk::ImageView image_view = global::g_Device.createImageView(image_view_create_info);
+            if (!image_view) IFX_ERROR("Vulkan failed to create imageview");
+
+            m_vkSwapchainData.image_views.push_back(image_view);
+        }
+    }
+
+    void Renderer2D::DestroySwapchain(vk::SwapchainKHR swapchain)
+    {
+        if (!swapchain) return;
+
+        for (vk::ImageView image_view : m_vkSwapchainData.image_views) { global::g_Device.destroyImageView(image_view); }
+        m_vkSwapchainData.image_views.clear();
+
+        for (auto& frame_data : m_vkFramesData) {
+            if (frame_data.queue_submit_fence)
+            {
+                global::g_Device.destroyFence(frame_data.queue_submit_fence);
+                frame_data.queue_submit_fence = nullptr;
+            }
+
+            if (frame_data.primary_command_buffer)
+            {
+                global::g_Device.freeCommandBuffers(frame_data.primary_command_pool, frame_data.primary_command_buffer);
+                frame_data.primary_command_buffer = nullptr;
+            }
+
+            if (frame_data.primary_command_pool)
+            {
+                global::g_Device.destroyCommandPool(frame_data.primary_command_pool);
+                frame_data.primary_command_pool = nullptr;
+            }
+
+            if (frame_data.swapchain_acquire_semaphore)
+            {
+                global::g_Device.destroySemaphore(frame_data.swapchain_acquire_semaphore);
+                frame_data.swapchain_acquire_semaphore = nullptr;
+            }
+
+            if (frame_data.swapchain_release_semaphore)
+            {
+                global::g_Device.destroySemaphore(frame_data.swapchain_release_semaphore);
+                frame_data.swapchain_release_semaphore = nullptr;
+            }
+        }
+        m_vkFramesData.clear();
+
+        global::g_Device.destroySwapchainKHR(swapchain);
+    }
 
     glm::vec2 Renderer2D::DrawString(const GraphicalString& str, glm::vec2 bounding_first, glm::vec2 bounding_second, int cursor)
     {

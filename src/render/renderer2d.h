@@ -217,17 +217,45 @@ namespace saf {
 	//	vma::Allocation m_vmaAllocation;
 	//};
 
+	struct SurfaceDetails
+	{
+		vk::SurfaceCapabilitiesKHR capabilities;
+		std::vector<vk::SurfaceFormatKHR> formats;
+		std::vector<vk::PresentModeKHR> presetmodes;
+	};
+
+	struct SwapchainData
+	{
+		vk::Extent2D                 extent{ UINT32_MAX, UINT32_MAX };
+		vk::Format                   format = vk::Format::eUndefined;
+		vk::SwapchainKHR             swapchain = nullptr;
+		std::vector<vk::ImageView>   image_views;
+	};
+
+	struct FrameData
+	{
+		vk::Fence         queue_submit_fence;
+		vk::CommandPool   primary_command_pool;
+		vk::CommandBuffer primary_command_buffer;
+		vk::Semaphore     swapchain_acquire_semaphore;
+		vk::Semaphore     swapchain_release_semaphore;
+	};
+
 	class Renderer2D
 	{
 	public:
-		Renderer2D();
+		Renderer2D(uint32_t width, uint32_t height);
 
 		void Init();
 		void Shutdown();
 		void BeginScene();
 		void Submit();
-		void Flush(vk::CommandBuffer cmd, const glm::mat4& projection);
+		bool Flush(const glm::mat4& projection);
 		void EndScene();
+
+		void Resize(uint32_t width, uint32_t height);
+		void CreateSwapchain();
+		void DestroySwapchain(vk::SwapchainKHR old_swapchain);
 
 		glm::vec2 DrawString(const GraphicalString& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1);
 		glm::vec2 DrawString(const std::string& str, glm::vec2 bounding_first = { -1.f, -1.f }, glm::vec2 bounding_second = { 1.f, 1.f }, int cursor = -1, Font font = Font(saf::FontType::ComicSans, 0.5f));
@@ -275,7 +303,6 @@ namespace saf {
 
 		vk::PipelineLayout m_vkComputePipelineLayout = nullptr;
 		vk::Pipeline m_vkComputePipeline = nullptr;
-		vk::PipelineLayout m_vkComputePipelineLayout = nullptr;
 
 		glm::mat4 m_Projection;
 
@@ -310,7 +337,11 @@ namespace saf {
 
 		//std::vector<std::shared_ptr<Image>> m_ImageList;
 
-		friend class FrameManager;
+		SwapchainData m_vkSwapchainData{};
+		std::vector<FrameData> m_vkFramesData{};
+		std::vector<vk::Semaphore> m_vkRecycleSemaphores{};
+
+		uint32_t m_Width, m_Height;
 	};
 
 }

@@ -145,7 +145,7 @@ namespace saf {
             return pipeline;
         }
 
-        [nodiscard] inline vk::Pipeline CreateComputePipeline(
+        [[nodiscard]] inline vk::Pipeline CreateComputePipeline(
             vk::Device                                                device,
             vk::PipelineCache                                         pipeline_cache,
             vk::PipelineShaderStageCreateInfo                         shader_stage,
@@ -450,7 +450,7 @@ namespace saf {
             return buffer;
         }
 
-        [[nodiscard]] inline vk::Image CreateImage(vk::Device device, uint32_t queue_index, vma::Allocator allocator, uint32_t width, uint32_t height, uint32_t depth, uint8_t* rawimagedata, vma::Allocation& image_allocation)
+        [[nodiscard]] inline vk::Image CreateImage(vk::Device device, uint32_t queue_index, vma::Allocator allocator, uint32_t width, uint32_t height, uint32_t depth, uint8_t* rawimagedata, vma::Allocation& image_allocation, vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst, vk::ImageLayout image_layout = vk::ImageLayout::eReadOnlyOptimal)
         {
             vk::ImageCreateInfo image_create_info(
                 {},
@@ -461,7 +461,7 @@ namespace saf {
                 1,
                 vk::SampleCountFlagBits::e1,
                 vk::ImageTiling::eOptimal,
-                vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+                usage,
                 vk::SharingMode::eExclusive,
                 {},
                 {},
@@ -486,53 +486,52 @@ namespace saf {
             if (allocator.createImage(&image_create_info, &alloc_create_info, &image, &image_allocation, nullptr) != vk::Result::eSuccess)
                 IFX_ERROR("Failed to create image");
 
-            uint8_t* imagedata;
-
-            vma::Allocation staging_allocation;
-            vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
-
             if (rawimagedata)
             {
+                uint8_t* imagedata;
+                vma::Allocation staging_allocation;
+                vk::Buffer stageing_buffer = vkhelper::create_buffer(sizeof(uint8_t) * width * height * depth, vk::BufferUsageFlagBits::eTransferSrc, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferHost, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, allocator, staging_allocation);
+
                 ERR_GUARD_VULKAN(vmaMapMemory(allocator, staging_allocation, reinterpret_cast<void**>(&imagedata)));
                 memcpy(imagedata, rawimagedata, sizeof(uint8_t) * width * height * depth);
                 vmaUnmapMemory(allocator, staging_allocation);
+
+                vkhelper::immediate_submit(device, queue_index, [width, height, stageing_buffer, image, image_layout](vk::CommandBuffer cmd)
+                    {
+                        vk::ImageMemoryBarrier image_memory_barrier_pre(
+                            vk::AccessFlagBits::eNone,
+                            vk::AccessFlagBits::eTransferWrite,
+                            vk::ImageLayout::eUndefined,
+                            vk::ImageLayout::eTransferDstOptimal,
+                            VK_QUEUE_FAMILY_IGNORED,
+                            VK_QUEUE_FAMILY_IGNORED,
+                            image,
+                            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                        );
+
+                        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
+
+                        vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
+
+                        cmd.copyBufferToImage(stageing_buffer, image, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
+
+                        vk::ImageMemoryBarrier image_memory_barrier_post(
+                            vk::AccessFlagBits::eTransferWrite,
+                            vk::AccessFlagBits::eShaderRead,
+                            vk::ImageLayout::eTransferDstOptimal,
+                            image_layout,
+                            VK_QUEUE_FAMILY_IGNORED,
+                            VK_QUEUE_FAMILY_IGNORED,
+                            image,
+                            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+                        );
+
+                        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
+                    });
+
+                allocator.destroyBuffer(stageing_buffer, staging_allocation);
             }
 
-            vkhelper::immediate_submit(device, queue_index, [width, height, stageing_buffer, image](vk::CommandBuffer cmd)
-                {
-                    vk::ImageMemoryBarrier image_memory_barrier_pre(
-                        vk::AccessFlagBits::eNone,
-                        vk::AccessFlagBits::eTransferWrite,
-                        vk::ImageLayout::eUndefined,
-                        vk::ImageLayout::eTransferDstOptimal,
-                        VK_QUEUE_FAMILY_IGNORED,
-                        VK_QUEUE_FAMILY_IGNORED,
-                        image,
-                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                    );
-
-                    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_pre);
-
-                    vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
-
-                    cmd.copyBufferToImage(stageing_buffer, image, vk::ImageLayout::eTransferDstOptimal, buffer_image_copy);
-
-                    vk::ImageMemoryBarrier image_memory_barrier_post(
-                        vk::AccessFlagBits::eTransferWrite,
-                        vk::AccessFlagBits::eShaderRead,
-                        vk::ImageLayout::eTransferDstOptimal,
-                        vk::ImageLayout::eShaderReadOnlyOptimal,
-                        VK_QUEUE_FAMILY_IGNORED,
-                        VK_QUEUE_FAMILY_IGNORED,
-                        image,
-                        vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                    );
-
-                    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {}, image_memory_barrier_post);
-                });
-
-            allocator.destroyBuffer(stageing_buffer, staging_allocation);
-            
             return image;
         }
 

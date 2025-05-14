@@ -1,13 +1,37 @@
 #version 450
+#extension GL_KHR_vulkan_glsl: enable
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout(binding = 0, r8f) uniform writeonly image2D ImageOut;
-layout(binding = 1, r8f) uniform readonly image2D ImageIn;
+layout(set = 0, binding = 0, rgba8) uniform readonly image2D ImageIn;
+layout(set = 0, binding = 1, rgba8) uniform image2D ImageOut;
 
 void main() {
-  uint row = (gl_GlobalInvocationID.x);
-  uint col = (gl_GlobalInvocationID.y);
-  float x = imageLoad(values, ivec2(row, col));
-  imageStore(outputValues, ivec2(gl_GlobalInvocationID.xy), 1.f - x);
+	vec2 position = vec2((gl_GlobalInvocationID.x / 3840.0 * 2.0 - 1.0) * 1.0 * 16.0 / 9.0, (gl_GlobalInvocationID.y / 2160.0 * 2.0 - 1.0) * 1.0);
+
+	vec2 z = position;
+	
+	vec4 color = vec4(0.0, 1.0, 0.0, 1.0);
+	bool failed = false;
+
+	for (int i = 0; i < 1000; i++)
+	{
+
+		if (dot(z, z) > 2.0)
+		{
+			color = mix(vec4(0.0, 0.0, 0.0, 1.0), vec4(1.0, 0.0, 0.0, 1.0), float(i) / 100.0);
+			failed = true;
+			break;
+		}
+
+		z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + position;
+	}
+
+	if (failed)
+	{
+		color = vec4(0.0, 0.0, 0.0, 0.0);
+	}
+
+	imageStore(ImageOut, ivec2(gl_GlobalInvocationID.xy), color);
+	//imageStore(ImageOut, ivec2(gl_GlobalInvocationID.xy), x);
 }

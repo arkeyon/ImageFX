@@ -23,8 +23,6 @@ namespace saf {
     - create shader pipeline
     */
 
-    class FrameManager;
-
     class Window
     {
     public:

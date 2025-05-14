@@ -79,8 +79,6 @@ namespace saf {
         std::shared_ptr<Input> m_Input;
         std::shared_ptr<Renderer2D> m_Renderer2D;
     private:
-        std::unique_ptr<FrameManager> m_FrameManager;
-
         std::vector<std::shared_ptr<Layer>> m_Layers;
         std::shared_ptr<DebugLayer> m_DebugLayer;
 
