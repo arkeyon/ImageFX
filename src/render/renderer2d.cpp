@@ -369,139 +369,139 @@ namespace saf {
             global::g_Device.destroyShaderModule(shader_stages[0].module);
             global::g_Device.destroyShaderModule(shader_stages[1].module);
         }
-        {
-
-            std::array<vk::DescriptorSetLayoutBinding, 2> desc_bindings {};
-            desc_bindings[0].binding = 0;
-            desc_bindings[0].descriptorCount = 1;
-            desc_bindings[0].descriptorType = vk::DescriptorType::eStorageImage;
-            desc_bindings[0].pImmutableSamplers = nullptr;
-            desc_bindings[0].stageFlags = vk::ShaderStageFlagBits::eCompute;
-
-            desc_bindings[1].binding = 1;
-            desc_bindings[1].descriptorCount = 1;
-            desc_bindings[1].descriptorType = vk::DescriptorType::eStorageImage;
-            desc_bindings[1].pImmutableSamplers = nullptr;
-            desc_bindings[1].stageFlags = vk::ShaderStageFlagBits::eCompute;
-
-            vk::DescriptorSetLayoutCreateInfo desc_create_info({}, desc_bindings);
-            vk::DescriptorSetLayout desc_layout = global::g_Device.createDescriptorSetLayout(desc_create_info);
-            if (!desc_layout) IFX_ERROR("Vulkan failed to create descriptor set layout");
-
-            vk::DescriptorSetAllocateInfo desc_alloc_info(global::g_DescriptorPool, desc_layout);
-            vk::DescriptorSet desc_set = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
-            if (!desc_set) IFX_ERROR("Vulkan failed to allocate descriptor set");
-
-            int width, height;
-            stbi_uc* rawimage = stbi_load("assets/test.png", &width, &height, nullptr, 4);
-
-            vma::Allocation image_allocation;
-            vk::Image image1 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, static_cast<uint8_t*>(rawimage), image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferDst, vk::ImageLayout::eTransferDstOptimal);
-            vk::Image image2 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, nullptr, image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc, vk::ImageLayout::eGeneral);
-            vk::ImageViewCreateInfo image_view_create_info1({}, image1, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-            vk::ImageViewCreateInfo image_view_create_info2({}, image2, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-            vk::ImageView image_view1 = global::g_Device.createImageView(image_view_create_info1);
-            vk::ImageView image_view2 = global::g_Device.createImageView(image_view_create_info2);
-
-            global::g_GraphicsQueue.waitIdle();
-            stbi_image_free(rawimage);
-
-            vk::DescriptorImageInfo image_info1{};
-            image_info1.imageLayout = vk::ImageLayout::eGeneral;
-            image_info1.imageView = image_view1;
-            vk::DescriptorImageInfo image_info2{};
-            image_info2.imageLayout = vk::ImageLayout::eGeneral;
-            image_info2.imageView = image_view2;
-
-            std::array<vk::WriteDescriptorSet, 2> desc_writes
-            {
-                vk::WriteDescriptorSet(desc_set, 0, 0, desc_bindings[0].descriptorType, image_info1, {}, {}),
-                vk::WriteDescriptorSet(desc_set, 1, 0, desc_bindings[1].descriptorType, image_info2, {}, {})
-            };
-
-            global::g_Device.updateDescriptorSets(desc_writes, {});
-
-            vk::PipelineLayoutCreateInfo pipeline_layout_info({}, desc_layout, {});
-            m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({pipeline_layout_info});
-
-            vk::PipelineShaderStageCreateInfo shader_stage(
-                {},
-                vk::ShaderStageFlagBits::eCompute,
-                vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/test.comp"),
-                "main"
-            );
-
-            m_vkComputePipeline = vkhelper::CreateComputePipeline(
-                global::g_Device,
-                nullptr,
-                shader_stage,
-                m_vkComputePipelineLayout
-            ); // We need to specify the pipeline layout
-
-            if (!m_vkComputePipelineLayout) IFX_ERROR("Vulkan failed to create compute pipeline");
-            // Pipeline is baked, we can delete the shader modules now.
-            global::g_Device.destroyShaderModule(shader_stage.module);
-
-            vma::Allocation recieve_buffer_alloc;
-            vk::Buffer recieve_buffer = vkhelper::create_buffer(width * height * 4, vk::BufferUsageFlagBits::eTransferDst, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferDevice, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, recieve_buffer_alloc);
-
-            vkhelper::immediate_submit(global::g_Device, global::g_ComputeQueueIndex, [this, desc_set, width, height, image1, image2, recieve_buffer](vk::CommandBuffer cmd)
-            {
-                cmd.bindPipeline(vk::PipelineBindPoint::eCompute, m_vkComputePipeline);
-
-                vk::ImageMemoryBarrier image_memory_barrier_pre(
-                    vk::AccessFlagBits::eNone,
-                    vk::AccessFlagBits::eShaderRead,
-                    vk::ImageLayout::eTransferDstOptimal,
-                    vk::ImageLayout::eGeneral,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    image1,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre);
-
-                vk::ImageMemoryBarrier image_memory_barrier_pre2(
-                    vk::AccessFlagBits::eNone,
-                    vk::AccessFlagBits::eShaderWrite,
-                    vk::ImageLayout::eUndefined,
-                    vk::ImageLayout::eGeneral,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    image2,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre2);
-
-                cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_vkComputePipelineLayout, 0, desc_set, {});
-                cmd.dispatch(width / 64, height, 1);
-
-                vk::ImageMemoryBarrier image_memory_barrier_post(
-                    vk::AccessFlagBits::eShaderWrite,
-                    vk::AccessFlagBits::eTransferWrite,
-                    vk::ImageLayout::eGeneral,
-                    vk::ImageLayout::eTransferSrcOptimal,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    VK_QUEUE_FAMILY_IGNORED,
-                    image2,
-                    vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
-                );
-
-                cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_post);
-
-                vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
-
-                cmd.copyImageToBuffer(image2, vk::ImageLayout::eTransferSrcOptimal, recieve_buffer, buffer_image_copy);
-            });
-
-            global::g_ComputeQueue.waitIdle();
-
-            const void* recieve_data = static_cast<stbi_uc*>(global::g_Allocator.mapMemory(recieve_buffer_alloc));
-            stbi_write_jpg("output.jpeg", width, height, 4, recieve_data, 0);
-
-        }
+        //{
+        //
+        //    std::array<vk::DescriptorSetLayoutBinding, 2> desc_bindings {};
+        //    desc_bindings[0].binding = 0;
+        //    desc_bindings[0].descriptorCount = 1;
+        //    desc_bindings[0].descriptorType = vk::DescriptorType::eStorageImage;
+        //    desc_bindings[0].pImmutableSamplers = nullptr;
+        //    desc_bindings[0].stageFlags = vk::ShaderStageFlagBits::eCompute;
+        //
+        //    desc_bindings[1].binding = 1;
+        //    desc_bindings[1].descriptorCount = 1;
+        //    desc_bindings[1].descriptorType = vk::DescriptorType::eStorageImage;
+        //    desc_bindings[1].pImmutableSamplers = nullptr;
+        //    desc_bindings[1].stageFlags = vk::ShaderStageFlagBits::eCompute;
+        //
+        //    vk::DescriptorSetLayoutCreateInfo desc_create_info({}, desc_bindings);
+        //    vk::DescriptorSetLayout desc_layout = global::g_Device.createDescriptorSetLayout(desc_create_info);
+        //    if (!desc_layout) IFX_ERROR("Vulkan failed to create descriptor set layout");
+        //
+        //    vk::DescriptorSetAllocateInfo desc_alloc_info(global::g_DescriptorPool, desc_layout);
+        //    vk::DescriptorSet desc_set = global::g_Device.allocateDescriptorSets(desc_alloc_info)[0];
+        //    if (!desc_set) IFX_ERROR("Vulkan failed to allocate descriptor set");
+        //
+        //    int width, height;
+        //    stbi_uc* rawimage = stbi_load("assets/test.png", &width, &height, nullptr, 4);
+        //
+        //    vma::Allocation image_allocation;
+        //    vk::Image image1 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, static_cast<uint8_t*>(rawimage), image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferDst, vk::ImageLayout::eTransferDstOptimal);
+        //    vk::Image image2 = vkhelper::CreateImage(global::g_Device, global::g_GraphicsQueueIndex, global::g_Allocator, width, height, 4, nullptr, image_allocation, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eTransferSrc, vk::ImageLayout::eGeneral);
+        //    vk::ImageViewCreateInfo image_view_create_info1({}, image1, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+        //    vk::ImageViewCreateInfo image_view_create_info2({}, image2, vk::ImageViewType::e2D, vk::Format::eR8G8B8A8Unorm, {}, vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+        //    vk::ImageView image_view1 = global::g_Device.createImageView(image_view_create_info1);
+        //    vk::ImageView image_view2 = global::g_Device.createImageView(image_view_create_info2);
+        //
+        //    global::g_GraphicsQueue.waitIdle();
+        //    stbi_image_free(rawimage);
+        //
+        //    vk::DescriptorImageInfo image_info1{};
+        //    image_info1.imageLayout = vk::ImageLayout::eGeneral;
+        //    image_info1.imageView = image_view1;
+        //    vk::DescriptorImageInfo image_info2{};
+        //    image_info2.imageLayout = vk::ImageLayout::eGeneral;
+        //    image_info2.imageView = image_view2;
+        //
+        //    std::array<vk::WriteDescriptorSet, 2> desc_writes
+        //    {
+        //        vk::WriteDescriptorSet(desc_set, 0, 0, desc_bindings[0].descriptorType, image_info1, {}, {}),
+        //        vk::WriteDescriptorSet(desc_set, 1, 0, desc_bindings[1].descriptorType, image_info2, {}, {})
+        //    };
+        //
+        //    global::g_Device.updateDescriptorSets(desc_writes, {});
+        //
+        //    vk::PipelineLayoutCreateInfo pipeline_layout_info({}, desc_layout, {});
+        //    m_vkComputePipelineLayout = global::g_Device.createPipelineLayout({pipeline_layout_info});
+        //
+        //    vk::PipelineShaderStageCreateInfo shader_stage(
+        //        {},
+        //        vk::ShaderStageFlagBits::eCompute,
+        //        vkhelper::CreateShaderModule(global::g_Device, "assets/shaders/test.comp"),
+        //        "main"
+        //    );
+        //
+        //    m_vkComputePipeline = vkhelper::CreateComputePipeline(
+        //        global::g_Device,
+        //        nullptr,
+        //        shader_stage,
+        //        m_vkComputePipelineLayout
+        //    ); // We need to specify the pipeline layout
+        //
+        //    if (!m_vkComputePipelineLayout) IFX_ERROR("Vulkan failed to create compute pipeline");
+        //    // Pipeline is baked, we can delete the shader modules now.
+        //    global::g_Device.destroyShaderModule(shader_stage.module);
+        //
+        //    vma::Allocation recieve_buffer_alloc;
+        //    vk::Buffer recieve_buffer = vkhelper::create_buffer(width * height * 4, vk::BufferUsageFlagBits::eTransferDst, vk::SharingMode::eExclusive, vma::MemoryUsage::eAutoPreferDevice, vma::AllocationCreateFlagBits::eHostAccessSequentialWrite, global::g_Allocator, recieve_buffer_alloc);
+        //
+        //    vkhelper::immediate_submit(global::g_Device, global::g_ComputeQueueIndex, [this, desc_set, width, height, image1, image2, recieve_buffer](vk::CommandBuffer cmd)
+        //    {
+        //        cmd.bindPipeline(vk::PipelineBindPoint::eCompute, m_vkComputePipeline);
+        //
+        //        vk::ImageMemoryBarrier image_memory_barrier_pre(
+        //            vk::AccessFlagBits::eNone,
+        //            vk::AccessFlagBits::eShaderRead,
+        //            vk::ImageLayout::eTransferDstOptimal,
+        //            vk::ImageLayout::eGeneral,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            image1,
+        //            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+        //        );
+        //
+        //        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre);
+        //
+        //        vk::ImageMemoryBarrier image_memory_barrier_pre2(
+        //            vk::AccessFlagBits::eNone,
+        //            vk::AccessFlagBits::eShaderWrite,
+        //            vk::ImageLayout::eUndefined,
+        //            vk::ImageLayout::eGeneral,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            image2,
+        //            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+        //        );
+        //
+        //        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eComputeShader, {}, {}, {}, image_memory_barrier_pre2);
+        //
+        //        cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_vkComputePipelineLayout, 0, desc_set, {});
+        //        cmd.dispatch(width / 64, height, 1);
+        //
+        //        vk::ImageMemoryBarrier image_memory_barrier_post(
+        //            vk::AccessFlagBits::eShaderWrite,
+        //            vk::AccessFlagBits::eTransferWrite,
+        //            vk::ImageLayout::eGeneral,
+        //            vk::ImageLayout::eTransferSrcOptimal,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            VK_QUEUE_FAMILY_IGNORED,
+        //            image2,
+        //            vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)
+        //        );
+        //
+        //        cmd.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader, vk::PipelineStageFlagBits::eTransfer, {}, {}, {}, image_memory_barrier_post);
+        //
+        //        vk::BufferImageCopy buffer_image_copy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), vk::Offset3D(0, 0, 0), vk::Extent3D(width, height, 1));
+        //
+        //        cmd.copyImageToBuffer(image2, vk::ImageLayout::eTransferSrcOptimal, recieve_buffer, buffer_image_copy);
+        //    });
+        //
+        //    global::g_ComputeQueue.waitIdle();
+        //
+        //    const void* recieve_data = static_cast<stbi_uc*>(global::g_Allocator.mapMemory(recieve_buffer_alloc));
+        //    stbi_write_jpg("output.jpeg", width, height, 4, recieve_data, 0);
+        //
+        //}
 	}
 
     void Renderer2D::Shutdown()
