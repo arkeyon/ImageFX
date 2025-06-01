@@ -986,10 +986,10 @@ namespace saf {
                 m_VertexBuffer[vertex_offs + 2].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x - glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
                 m_VertexBuffer[vertex_offs + 3].pos = translation * rotation * glm::vec4(glyphBoundingBoxBottomLeft.x + glyphSize.x / 2.f, glyphBoundingBoxBottomLeft.y - glyphSize.y / 2.f, 0.f, 1.f);
 
-                m_VertexBuffer[vertex_offs + 0].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t1);
-                m_VertexBuffer[vertex_offs + 1].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t1);
-                m_VertexBuffer[vertex_offs + 2].tex_coord = glm::vec2(alignedQuad->s0, alignedQuad->t0);
-                m_VertexBuffer[vertex_offs + 3].tex_coord = glm::vec2(alignedQuad->s1, alignedQuad->t0);
+                m_VertexBuffer[vertex_offs + 0].uv = glm::vec2(alignedQuad->s1, alignedQuad->t1);
+                m_VertexBuffer[vertex_offs + 1].uv = glm::vec2(alignedQuad->s0, alignedQuad->t1);
+                m_VertexBuffer[vertex_offs + 2].uv = glm::vec2(alignedQuad->s0, alignedQuad->t0);
+                m_VertexBuffer[vertex_offs + 3].uv = glm::vec2(alignedQuad->s1, alignedQuad->t0);
 
                 float fade = 1.f - font.fade;
                 m_VertexBuffer[vertex_offs + 0].color = font.color * fade;
@@ -999,10 +999,10 @@ namespace saf {
 
                 float fontz = (static_cast<float>(font.fonttype) + 0.5f) / static_cast<float>(m_FontAtlas->m_NumOfFonts);
 
-                m_VertexBuffer[vertex_offs + 0].samplerid = fontz;
-                m_VertexBuffer[vertex_offs + 1].samplerid = fontz;
-                m_VertexBuffer[vertex_offs + 2].samplerid = fontz;
-                m_VertexBuffer[vertex_offs + 3].samplerid = fontz;
+                m_VertexBuffer[vertex_offs + 0].texid = fontz;
+                m_VertexBuffer[vertex_offs + 1].texid = fontz;
+                m_VertexBuffer[vertex_offs + 2].texid = fontz;
+                m_VertexBuffer[vertex_offs + 3].texid = fontz;
 
                 // Update the position to render the next glyph specified by packedChar->xadvance.
                 localPosition.x += packedChar->xadvance * font.scale;

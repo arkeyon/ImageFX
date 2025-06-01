@@ -18,8 +18,8 @@ namespace saf {
 	struct Vertex {
 		glm::vec3 pos;
 		glm::vec4 color;
-		glm::vec2 tex_coord;
-		float samplerid;
+		glm::vec2 uv;
+		float texid;
 
 		inline static std::array<vk::VertexInputBindingDescription, 1> getBindingDescription() {
 			return { vk::VertexInputBindingDescription(0, sizeof(Vertex)) };
@@ -31,9 +31,14 @@ namespace saf {
 			{
 				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
 				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color)),
-				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, tex_coord)),
-				vk::VertexInputAttributeDescription(3, 0, vk::Format::eR32Sfloat, offsetof(Vertex, samplerid))
+				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, uv)),
+				vk::VertexInputAttributeDescription(3, 0, vk::Format::eR32Sfloat, offsetof(Vertex, texid))
 			};
+		}
+
+		inline void print()
+		{
+
 		}
 	};
 

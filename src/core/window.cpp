@@ -10,7 +10,6 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
-#include "render/graphics.h"
 #include "globals.h"
 #include "platform/vulkangraphics.h"
 

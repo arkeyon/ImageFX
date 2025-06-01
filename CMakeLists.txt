@@ -52,6 +52,7 @@ add_library(${PROJECT_NAME}
 	${PROJECT_SOURCE_DIR}/src/main.cpp
 	${PROJECT_SOURCE_DIR}/src/utils/stbimpl.cpp
 	${PROJECT_SOURCE_DIR}/src/utils/vmaimpl.cpp
+	${PROJECT_SOURCE_DIR}/src/utils/maths.h
 	${PROJECT_SOURCE_DIR}/src/core/entrypoint.cpp
 	${PROJECT_SOURCE_DIR}/src/core/window.cpp				${PROJECT_SOURCE_DIR}/src/core/window.h
 	${PROJECT_SOURCE_DIR}/src/core/definitions.cpp			${PROJECT_SOURCE_DIR}/src/core/definitions.h
@@ -63,7 +64,8 @@ add_library(${PROJECT_NAME}
 	${PROJECT_SOURCE_DIR}/src/utils/log.cpp					${PROJECT_SOURCE_DIR}/src/utils/log.h
 	${PROJECT_SOURCE_DIR}/src/platform/vulkangraphics.cpp	${PROJECT_SOURCE_DIR}/src/platform/vulkangraphics.h
 	${PROJECT_SOURCE_DIR}/src/globals.cpp					${PROJECT_SOURCE_DIR}/src/globals.h
-)
+	${PROJECT_SOURCE_DIR}/src/input/camera/camera.h			${PROJECT_SOURCE_DIR}/src/input/camera/camera.cpp
+	${PROJECT_SOURCE_DIR}/src/utils/meshfactory.h			${PROJECT_SOURCE_DIR}/src/utils/meshfactory.cpp)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/src)
 #target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})

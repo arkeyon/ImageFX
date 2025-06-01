@@ -7,6 +7,9 @@
 
 #include <vk_mem_alloc.hpp>
 
+#include "utils/log.h"
+#include "core/definitions.h"
+
 namespace saf {
 
 	namespace vkhelper {
