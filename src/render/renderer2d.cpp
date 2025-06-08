@@ -536,9 +536,9 @@ namespace saf {
         if (m_vkSwapchainData.swapchain) DestroySwapchain(m_vkSwapchainData.swapchain);
     }
 
-	void Renderer2D::BeginScene()
+	void Renderer2D::BeginScene(glm::mat4 projection)
 	{
-
+        m_SceneData.projection = projection;
 	}
 
 	void Renderer2D::Submit()

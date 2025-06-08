@@ -130,7 +130,7 @@ namespace saf {
 				m_GChars.emplace_back(ch, font);
 			}
 		}
-
+		
 		inline size_t Length() const { return m_GChars.size(); }
 
 		inline std::string ToString()
@@ -253,7 +253,7 @@ namespace saf {
 
 		void Init();
 		void Shutdown();
-		void BeginScene();
+		void BeginScene(glm::mat4 projection);
 		void Submit();
 		bool Flush(const glm::mat4& projection);
 		void EndScene();
@@ -303,6 +303,19 @@ namespace saf {
 		 */
 
 	private:
+
+		struct SceneData
+		{
+			glm::mat4 projection;
+		} m_SceneData;
+
+		struct RenderOperation
+		{
+			uint32_t scene;
+		};
+
+		std::vector<RenderOperation> m_RenderOperations;
+
 		vk::PipelineLayout m_vkAtlasPipelineLayout = nullptr;
 		vk::Pipeline m_vkAtlasPipeline = nullptr;
 

@@ -79,8 +79,6 @@ namespace saf {
     private:
         std::vector<std::shared_ptr<Layer>> m_Layers;
         std::shared_ptr<DebugLayer> m_DebugLayer;
-
-        glm::mat4 m_Projection2D;
     };
 
 }

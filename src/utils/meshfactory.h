@@ -58,33 +58,21 @@ namespace saf {
 			return *this;
 		}
 
-		inline ThisMesh& Insert(const ThisMesh& other, uint32_t vertexoffs = 0U, uint32_t indexoffs = 0U)
+		inline ThisMesh& Insert(const ThisMesh& other, uint32_t vertexoffs = 0U, uint32_t indexoffs = 0U, const bool add_vertoffs_to_indices = true)
 		{
 			uint32_t max = m_Vertices.capacity();
 
 			T* verts = m_Vertices.data();
 
-			if (!pre_alloc)
+			if (m_Vertices.capacity() < vertexoffs + other.m_Vertices.size()) m_Vertices.resize(vertexoffs + other.m_Vertices.size());
+			for (int i = 0; i < other.m_Vertices.size(); ++i)
 			{
-				if (m_Vertices.capacity() < vertexoffs + other.m_Vertices.size()) m_Vertices.resize(vertexoffs + other.m_Vertices.size());
-				for (int i = 0; i < other.m_Vertices.size(); ++i)
-				{
-					m_Vertices[vertexoffs + i] = other.m_Vertices[i];
-				}
-			}
-			else
-			{
-				if (m_Vertices.capacity() < other.m_Vertices.size()) m_Vertices.resize(other.m_Vertices.size());
-				for (int i = 0; i < other.m_Vertices.size(); ++i)
-				{
-					m_Vertices[vertexoffs + i] = other.m_Vertices[i];
-				}
+				m_Vertices[vertexoffs + i] = other.m_Vertices[i];
 			}
 
-			uint32_t isize = m_Indices.size();
-			if (!pre_alloc)
+			if (add_vertoffs_to_indices)
 			{
-				if (m_Indices.capacity() < isize + other.m_Indices.size()) m_Indices.resize(indexoffs + other.m_Indices.size());
+				if (m_Indices.capacity() < indexoffs + other.m_Indices.size()) m_Indices.resize(indexoffs + other.m_Indices.size());
 				for (int i = 0; i < other.m_Indices.size(); ++i)
 				{
 					m_Indices[indexoffs + i] = vertexoffs + other.m_Indices[i];
@@ -92,17 +80,15 @@ namespace saf {
 			}
 			else
 			{
-				if (m_Indices.capacity() < other.m_Indices.size()) m_Indices.resize(other.m_Indices.size());
+				if (m_Indices.capacity() < other.m_Indices.size()) m_Indices.resize(indexoffs + other.m_Indices.size());
 				for (int i = 0; i < other.m_Indices.size(); ++i)
 				{
-					m_Indices[indexoffs + i] = vertexoffs + other.m_Indices[i];
+					m_Indices[indexoffs + i] = other.m_Indices[i];
 				}
 			}
 
 			return *this;
 		}
-	
-		inline ThisMesh& Append(const ThisMesh& other)
 	};
 
 	const glm::ivec2 tvertices[]
@@ -384,14 +370,14 @@ namespace saf {
 
 			int indeoffs = 0;
 			ThisMesh mesh(wdetail * ddetail * 2 + ddetail * (hdetail - 2) * 2 + (wdetail - 2) * (hdetail - 2) * 2, (wdetail - 1) * (ddetail - 1) * 12 + (hdetail - 1) * (ddetail - 1) * 12 + (wdetail - 1) * (hdetail - 1) * 12);
-			mesh.Insert(bottom, bottomvertoffs, indeoffs, true);
-			mesh.Insert(top, topvertoffs, indeoffs += bottom.m_Indices.size(), true);
-			mesh.Insert(right, rightvertoffs, indeoffs += top.m_Indices.size(), true);
-			mesh.Insert(left, leftvertoffs, indeoffs += right.m_Indices.size(), true);
-			mesh.Insert(back, backvertoffs, indeoffs += left.m_Indices.size(), true);
-			mesh.Insert(front, frontvertoffs, indeoffs += back.m_Indices.size(), true);
+			mesh.Insert(bottom, bottomvertoffs, indeoffs);
+			mesh.Insert(top, topvertoffs, indeoffs += bottom.m_Indices.size());
+			mesh.Insert(right, rightvertoffs, indeoffs += top.m_Indices.size());
+			mesh.Insert(left, leftvertoffs, indeoffs += right.m_Indices.size());
+			mesh.Insert(back, backvertoffs, indeoffs += left.m_Indices.size());
+			mesh.Insert(front, frontvertoffs, indeoffs += back.m_Indices.size());
 
-			mesh.Insert(gaps, 0U, indeoffs += front.m_Indices.size(), true);
+			mesh.Insert(gaps, 0U, indeoffs += front.m_Indices.size(), false);
 
 			return mesh;
 		}

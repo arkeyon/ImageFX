@@ -38,6 +38,7 @@ namespace saf {
         inline uint32_t GetHeight() const { return m_Height; }
         inline float fGetWidth() const { return static_cast<float>(m_Width); }
         inline float fGetHeight() const { return static_cast<float>(m_Height); }
+        inline float GetAR() const { return fGetWidth() / fGetHeight(); }
         inline std::string GetTitle() const { return m_Title; }
         
         using EventCallbackFn = std::function<void(Event&)>;
